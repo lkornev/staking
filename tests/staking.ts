@@ -31,40 +31,69 @@ describe("staking", () => {
     const program = anchor.workspace.Staking as Program<Staking>;
     const provider = program.provider;
 
-    const owner: PublicKey = provider.wallet.publicKey;
+    let owner: Signer;
     const ownerInterest = 1; // %
-    let feePayer: Signer;
-    let rewardTokenMint: PublicKey;
-    const stakedTokenMint: PublicKey = NATIVE_MINT;
-    const rewardQueueKeypair: Keypair = anchor.web3.Keypair.generate();
     const confifChangeDelay = new BN(20); // secs
-    const configFixedPayment: Config = createConfigFixed();
     const rewardQueueLength = 10;
 
-    it("Sets up reward token mint and the fee payer", async () => {
-        feePayer = await createUserWithLamports(1);
-        rewardTokenMint = await createTokenMint({
-            authority: provider.wallet.publicKey,
-            feePayer,
-            decimals: 6,
-        });
-    });
+    const rewardQueueKeypair: Keypair = anchor.web3.Keypair.generate();
+    let rewardQueueElSize: number = 1; // TODO
+    let rewardQueueMetadata: number = 12; // TODO get from the program (if it's possible)
 
-    it("It initialized!", async () => {
-        // TODO create config PDA and use configFixed
+    let rewardTokenMint: PublicKey;
+    let stakedTokenMint: PublicKey;
 
-        const tx = await program.rpc.initialize(
-            owner,
+    it("Initializes factory!", async () => {
+        owner = await createUserWithLamports(3);
+
+        // TODO get the seed value form the program Factory.PDA_KEY
+        const [factoryPDA, _factoryBump] = await PublicKey.findProgramAddress(
+            [
+                anchor.utils.bytes.utf8.encode("factory")
+            ],
+            program.programId
+        );
+
+        await program.rpc.initialize(
+            owner.publicKey,
             ownerInterest,
-            rewardTokenMint,
-            stakedTokenMint,
             confifChangeDelay,
             rewardQueueLength,
             {
-                // TODO specify accounts
+                accounts: {
+                    factory: factoryPDA,
+                    rewardQueue: rewardQueueKeypair.publicKey,
+                    initializer: owner.publicKey,
+                    clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+                    systemProgram: SystemProgram.programId,
+                },
+                signers: [owner, rewardQueueKeypair],
+                preInstructions: [
+                    await program.account.rewardQueue.createInstruction(
+                        rewardQueueKeypair, 
+                        rewardQueueLength * rewardQueueElSize + rewardQueueMetadata
+                    ),
+                ]
             }
         );
-        console.log("Your transaction signature", tx);
+
+        const factory = await program.account.factory.fetch(factoryPDA);
+
+        expect(factory.owner.toString()).to.be.eq(`${owner.publicKey}`);
+        expect(factory.ownerInterest).to.be.eq(ownerInterest);
+        expect(factory.rewardQueue.toString()).to.be.eq(`${rewardQueueKeypair.publicKey}`);
+        expect(factory.configChangeDelay.toString()).to.be.eq(`${confifChangeDelay}`);
+    });
+
+    it("Creates mints", async () => {
+        rewardTokenMint = await createTokenMint(owner.publicKey, owner, 6);
+        stakedTokenMint = await createTokenMint(owner.publicKey, owner, 9);
+    });
+
+    it("Creates a new staking pool instance with fixed reward", async () => {
+        // await program.rpc.new(
+            // TODO
+        // );
     });
 });
 
@@ -75,25 +104,34 @@ describe("staking", () => {
 * If the user want to unstake the tokens one should wait for 40 seconds (`unstakeDelay`)
 * or loose 50% (`unstakeForseFeePercent`) of the tokens.
 */
-function createConfigFixed(): Config {
-    return {
-        rewardType: 0, // Fixed reward.
-        unstakeDelay: new BN(40), // secs
-        unstakeForseFeePercent: 50, // %
-        rewardPeriod: new BN(30), // secs
-        rewardPerToken: 10, // %
-        rewardTokensPerPeriod: new BN(0), // Not used with the fixed reward type.
-    }
+// function createConfigFixed(): Config {
+//     return {
+//         rewardType: 0, // Fixed reward.
+//         unstakeDelay: new BN(40), // secs
+//         unstakeForseFeePercent: 50, // %
+//         rewardPeriod: new BN(30), // secs
+//         rewardPerToken: 10, // %
+//         rewardTokensPerPeriod: new BN(0), // Not used with the fixed reward type.
+//     }
+// }
+
+export async function createUserWithLamports(lamports: number): Promise<Signer> {
+    const account = Keypair.generate();
+    const signature = await CONNECTION.requestAirdrop(
+        account.publicKey, 
+        lamports * LAMPORTS_PER_SOL
+    );
+    await CONNECTION.confirmTransaction(signature);
+    return account;
 }
 
-
-async function createTokenMint(params: { authority: PublicKey, feePayer: Signer, decimals: number }): Promise<PublicKey> {
+async function createTokenMint(authority: PublicKey, feePayer: Signer, decimals = 0): Promise<PublicKey> {
     return await createMint(
         CONNECTION,
-        params.feePayer,
-        params. authority,
-        null,
-        params.decimals || 0,
+        feePayer,
+        authority,
+        authority,
+        decimals,
     );
 }
 
@@ -105,11 +143,4 @@ async function getOrCreateATA(mint: PublicKey, feePayer: Signer, owner: PublicKe
         owner,
         true,
     );
-}
-
-export async function createUserWithLamports(lamports: number): Promise<Signer> {
-    const account = Keypair.generate();
-    const signature = await CONNECTION.requestAirdrop(account.publicKey, lamports);
-    await CONNECTION.confirmTransaction(signature);
-    return account;
 }
