@@ -1,32 +1,25 @@
 import * as anchor from "@project-serum/anchor";
 import { Program, BN } from "@project-serum/anchor";
 import { Staking } from "../target/types/staking";
-import { 
-    PublicKey, 
-    SystemProgram, 
-    LAMPORTS_PER_SOL, 
+import { RewardType } from "./reward";
+import { newSPFixedConfig, StakePoolConfig } from "./stake-pool";
+import {
+    createUserWithLamports,
+    createTokenMint,
+} from "./helpers";
+import {
+    PublicKey,
+    SystemProgram,
     Keypair,
     Connection,
     Signer,
 } from '@solana/web3.js';
-import { 
-    createMint,
-    TOKEN_PROGRAM_ID, 
-    getOrCreateAssociatedTokenAccount,
-    Account as TokenAccount,
-    mintTo,
-    getAccount,
-    createApproveInstruction,
-    NATIVE_MINT,
-} from '@solana/spl-token';
-import { Config } from './types'
 import { expect, assert } from 'chai';
 
-const CONNECTION = new Connection("http://localhost:8899", 'recent');
-
 describe("staking", () => {
-    // Configure the client to use the local cluster.
     anchor.setProvider(anchor.Provider.env());
+
+    const connection = new Connection("http://localhost:8899", 'recent');
 
     const program = anchor.workspace.Staking as Program<Staking>;
     const provider = program.provider;
@@ -37,22 +30,24 @@ describe("staking", () => {
     const rewardQueueLength = 10;
 
     const rewardQueueKeypair: Keypair = anchor.web3.Keypair.generate();
-    let rewardQueueElSize: number = 1; // TODO
+    let rewardQueueElSize: number = 1; // TODO get from the program (if it's possible)
     let rewardQueueMetadata: number = 12; // TODO get from the program (if it's possible)
 
     let rewardTokenMint: PublicKey;
-    let stakedTokenMint: PublicKey;
+    let stakeTokenMint: PublicKey;
+
+    let factoryPDA: PublicKey;
+    let stakePoolFixedPDA: PublicKey;
 
     it("Initializes factory!", async () => {
-        owner = await createUserWithLamports(3);
+        owner = await createUserWithLamports(connection, 10);
 
         // TODO get the seed value form the program Factory.PDA_KEY
-        const [factoryPDA, _factoryBump] = await PublicKey.findProgramAddress(
-            [
-                anchor.utils.bytes.utf8.encode("factory")
-            ],
+        const [_factoryPDA, _factoryBump] = await PublicKey.findProgramAddress(
+            [anchor.utils.bytes.utf8.encode("factory")],
             program.programId
         );
+        factoryPDA = _factoryPDA;
 
         await program.rpc.initialize(
             owner.publicKey,
@@ -64,7 +59,6 @@ describe("staking", () => {
                     factory: factoryPDA,
                     rewardQueue: rewardQueueKeypair.publicKey,
                     initializer: owner.publicKey,
-                    clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
                     systemProgram: SystemProgram.programId,
                 },
                 signers: [owner, rewardQueueKeypair],
@@ -79,68 +73,49 @@ describe("staking", () => {
 
         const factory = await program.account.factory.fetch(factoryPDA);
 
-        expect(factory.owner.toString()).to.be.eq(`${owner.publicKey}`);
+        expect(`${factory.owner}`).to.be.eq(`${owner.publicKey}`);
         expect(factory.ownerInterest).to.be.eq(ownerInterest);
-        expect(factory.rewardQueue.toString()).to.be.eq(`${rewardQueueKeypair.publicKey}`);
-        expect(factory.configChangeDelay.toString()).to.be.eq(`${confifChangeDelay}`);
+        expect(`${factory.rewardQueue}`).to.be.eq(`${rewardQueueKeypair.publicKey}`);
+        expect(`${factory.configChangeDelay}`).to.be.eq(`${confifChangeDelay}`);
     });
 
-    it("Creates mints", async () => {
-        rewardTokenMint = await createTokenMint(owner.publicKey, owner, 6);
-        stakedTokenMint = await createTokenMint(owner.publicKey, owner, 9);
+    it("Creates reward and stake mints", async () => {
+        rewardTokenMint = await createTokenMint(connection, owner.publicKey, owner, 6);
+        stakeTokenMint = await createTokenMint(connection, owner.publicKey, owner, 9);
     });
 
-    it("Creates a new staking pool instance with fixed reward", async () => {
-        // await program.rpc.new(
-            // TODO
-        // );
+    it("Creates new staking pool instance with fixed rewards", async () => {
+        // TODO get the seed value form the program StakePool.PDA_SEED_FIXED
+        const [_stakePoolFixedPDA, _spfBump] = await PublicKey.findProgramAddress(
+            [anchor.utils.bytes.utf8.encode("stake-pool-fixed")],
+            program.programId
+        );
+        stakePoolFixedPDA = _stakePoolFixedPDA;
+
+        const stakePoolConfig: StakePoolConfig = newSPFixedConfig(rewardTokenMint, stakeTokenMint);
+
+        await program.rpc.new(
+            ...Object.values(stakePoolConfig),
+            {
+                accounts: {
+                    factory: factoryPDA,
+                    stakePool: stakePoolFixedPDA,
+                    owner: owner.publicKey,
+                    clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+                    systemProgram: SystemProgram.programId,
+                },
+                signers: [owner]
+            }
+        );
+
+        const stakePool = await program.account.stakePool.fetch(stakePoolFixedPDA);
+
+        expect(`${stakePool.unstakeDelay}`).to.be.eq(`${stakePoolConfig.unstakeDelay}`);
+        expect(stakePool.unstakeForseFeePercent).to.be.eq(stakePoolConfig.unstakeForseFeePercent);
+        expect(`${stakePool.rewardPeriod}`).to.be.eq(`${stakePoolConfig.rewardPeriod}`);
+        expect(`${stakePool.rewardTokenMint}`).to.be.eq(`${stakePoolConfig.rewardTokenMint}`);
+        expect(`${stakePool.stakeTokenMint}`).to.be.eq(`${stakePoolConfig.stakeTokenMint}`);
+        expect(stakePool.rewardType).to.be.eq(stakePoolConfig.rewardType);
+        expect(`${stakePool.rewardMetadata}`).to.be.eq(`${stakePoolConfig.rewardMetadata}`);
     });
 });
-
-/**
-* A stakeholder will receive 10% (`rewardPerToken`) of the reward tokens for each staked token
-* every 30 seconds (`rewardPeriod`).
-*
-* If the user want to unstake the tokens one should wait for 40 seconds (`unstakeDelay`)
-* or loose 50% (`unstakeForseFeePercent`) of the tokens.
-*/
-// function createConfigFixed(): Config {
-//     return {
-//         rewardType: 0, // Fixed reward.
-//         unstakeDelay: new BN(40), // secs
-//         unstakeForseFeePercent: 50, // %
-//         rewardPeriod: new BN(30), // secs
-//         rewardPerToken: 10, // %
-//         rewardTokensPerPeriod: new BN(0), // Not used with the fixed reward type.
-//     }
-// }
-
-export async function createUserWithLamports(lamports: number): Promise<Signer> {
-    const account = Keypair.generate();
-    const signature = await CONNECTION.requestAirdrop(
-        account.publicKey, 
-        lamports * LAMPORTS_PER_SOL
-    );
-    await CONNECTION.confirmTransaction(signature);
-    return account;
-}
-
-async function createTokenMint(authority: PublicKey, feePayer: Signer, decimals = 0): Promise<PublicKey> {
-    return await createMint(
-        CONNECTION,
-        feePayer,
-        authority,
-        authority,
-        decimals,
-    );
-}
-
-async function getOrCreateATA(mint: PublicKey, feePayer: Signer, owner: PublicKey): Promise<TokenAccount> {
-    return await getOrCreateAssociatedTokenAccount(
-        CONNECTION,
-        feePayer,
-        mint,
-        owner,
-        true,
-    );
-}
