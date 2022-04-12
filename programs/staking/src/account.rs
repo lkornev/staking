@@ -8,14 +8,20 @@ pub struct Factory {
     pub owner: Pubkey,
     /// The percentage of reward tokens the owner will receive for users stakes.
     pub owner_interest: u8,
-    /// Global event queue for reward vendoring.
-    pub reward_queue: Pubkey,
     /// The amount of seconds should be passed before the next config change is allowed.
     pub config_change_delay: u128,
+    /// Describes the type of the reward tokens.
+    /// The mint itself does not need to be under control of the stake pool owner.
+    /// It could be the wrapped Sol mint or any other spl token mint.
+    pub reward_token_mint: Pubkey,
+    /// Describes the type of the tokens that are allowed to be staked.
+    /// The mint itself does not need to be under control of the stake pool owner or a stakeholder.
+    /// It could be the wrapped Sol mint or any other spl token mint.
+    pub stake_token_mint: Pubkey,
 }
 
 impl Factory {
-    pub const SPACE: usize = 1 + 32 + 1 + 32 + 32 + 32 + 32 + 16 + 8;
+    pub const SPACE: usize = 1 + 32 + 1 + 32 + 16 + 16 + 16; // TODO remove extra 16
     pub const PDA_KEY: &'static str = "factory";
     pub const PDA_SEED: & 'static [u8] = Factory::PDA_KEY.as_bytes();
 }
@@ -23,6 +29,77 @@ impl Factory {
 /// The config describes the behaviour of the staking pool instance.
 #[account]
 pub struct StakePool {
+    /// Storage of the config changes
+    pub config_history: Pubkey,
+}
+
+impl StakePool {
+    pub const SPACE: usize = 32;
+    pub const PDA_SEED_FIXED: & 'static [u8] = b"stake-pool-fixed";
+    pub const PDA_SEED_UNFIXED: & 'static [u8] = b"stake-pool-unfixed";
+}
+
+#[account]
+pub struct ConfigHistory {
+    // Invariant: index is position of the next available slot.
+    pub head: u32,
+    // Invariant: index is position of the first (oldest) taken slot.
+    // Invariant: head == tail => queue is initialized.
+    // Invariant: index_of(head + 1) == index_of(tail) => queue is full.
+    pub tail: u32,
+    // Although a vec is used, the size is immutable
+    // and defines during initialization.
+    pub history: Vec<Option<Pubkey>>,
+}
+
+impl ConfigHistory {
+    pub fn append(&mut self, config: Pubkey) -> u32 {
+        let cursor = self.head;
+
+        // Insert into next available slot.
+        let h_idx = self.index_of(self.head);
+        self.history[h_idx] = Some(config);
+
+        // Update head and tail counters.
+        let is_full = self.index_of(self.head + 1) == self.index_of(self.tail);
+        if is_full {
+            self.tail += 1;
+        }
+        self.head += 1;
+
+        cursor
+    }
+
+    pub fn index_of(&self, counter: u32) -> usize {
+        counter as usize % self.capacity()
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.history.len()
+    }
+
+    pub fn get(&self, cursor: u32) -> Option<Pubkey> {
+        self.history[cursor as usize % self.capacity()]
+    }
+
+    pub fn head(&self) -> u32 {
+        self.head
+    }
+
+    pub fn tail(&self) -> u32 {
+        self.tail
+    }
+}
+
+#[account]
+pub struct StakePoolConfig{
+    // creating timestamp
+    pub created_at: i64,
+    /// Last time the config changed. Unix timestamp.
+    pub last_config_change: i64,
+    // The total amount of tokens that been staked by all users of the pool
+    // when this config was active.
+    pub total_staked_tokens: u128,
     /// The time in seconds a stakeholder have to wait 
     /// to finish unstaking without paying the fee (`unstake_forse_fee_percent`).
     pub unstake_delay: u64,
@@ -34,16 +111,6 @@ pub struct StakePool {
     /// The time in seconds a stakeholder have to wait to receive the next reward.
     /// After each `reward_period` the stakeholders are allowed to claim the reward.
     pub reward_period: u64,
-    /// Describes the type of the reward tokens.
-    /// The mint itself does not need to be under control of the stake pool owner.
-    /// It could be the wrapped Sol mint or any other spl token mint.
-    pub reward_token_mint: Pubkey,
-    /// Describes the type of the tokens that are allowed to be staked.
-    /// The mint itself does not need to be under control of the stake pool owner or a stakeholder.
-    /// It could be the wrapped Sol mint or any other spl token mint.
-    pub stake_token_mint: Pubkey,
-    /// Last time the config changed. Unix timestamp.
-    pub last_config_change: i64,
     /// If the `reward_type` is Fixed
     /// `reward_metadata` is the fixed percentage of the income.
     /// Should be greather than 0 and less or equal to 100. (TODO check the range only if the reward_type is Fixed).
@@ -57,23 +124,10 @@ pub struct StakePool {
     pub reward_metadata: u128, // TODO change to Pubkey ?
 }
 
-impl StakePool {
-    pub const SPACE: usize = 8 + 1 + 8 + 16 + 16 + 8 + 1 + 16 + 32; // TODO Why we need extra 32?
-    pub const PDA_SEED_FIXED: & 'static [u8] = b"stake-pool-fixed";
-    pub const PDA_SEED_UNFIXED: & 'static [u8] = b"stake-pool-unfixed";
-}
-
-#[derive(Default, Clone, Copy, Debug, AnchorSerialize, AnchorDeserialize)]
-pub struct RewardEvent {
-    // /// The config could be changed by the owner of the stake pool, so we store
-    // /// the reference to the state snapshot that was actual at the time when the reward was created.
-    // /// That state snapshot is used to calculate the appopriate reward for the user.
-    // state_snapshot: Pubkey,
-
-    // vendor: Pubkey, // Reward vendor (TODO Why separate from Reward ?)
-    // ts: i64, // timestamp
-
-    // TODO store total staked tokens to calculate the reward amount for a particular stakeholder.
+impl StakePoolConfig {
+    pub const SPACE: usize = 8 + 8 + 16 + 8 + 1 + 8 + 1 + 16; // TODO remove extra 100
+    pub const PDA_SEED_FIXED: & 'static [u8] = b"stake-pool-config-fixed";
+    pub const PDA_SEED_UNFIXED: & 'static [u8] = b"stake-pool-config-unfixed";
 }
 
 /// Stakeholder account represents a stake state.
@@ -103,17 +157,4 @@ pub struct Stakeholder {
     /// entities. Used as a proof to reward vendors that the Member account
     /// was staked at a given point in time.
     pub last_stake_timestamp: u128,
-}
-
-#[account]
-pub struct RewardQueue {
-    // Invariant: index is position of the next available slot.
-    pub head: u32,
-    // Invariant: index is position of the first (oldest) taken slot.
-    // Invariant: head == tail => queue is initialized.
-    // Invariant: index_of(head + 1) == index_of(tail) => queue is full.
-    pub tail: u32,
-    // Although a vec is used, the size is immutable
-    // and defines during initialization.
-    pub events: Vec<RewardEvent>,
 }

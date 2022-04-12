@@ -1,7 +1,6 @@
 import * as anchor from "@project-serum/anchor";
 import { Program, BN } from "@project-serum/anchor";
 import { Staking } from "../target/types/staking";
-import { RewardType } from "./reward";
 import { newSPFixedConfig, StakePoolConfig } from "./stake-pool";
 import {
     createUserWithLamports,
@@ -22,27 +21,31 @@ describe("staking", () => {
     const connection = new Connection("http://localhost:8899", 'recent');
 
     const program = anchor.workspace.Staking as Program<Staking>;
-    const provider = program.provider;
 
     let owner: Signer;
     const ownerInterest = 1; // %
     const confifChangeDelay = new BN(20); // secs
-    const rewardQueueLength = 10;
 
-    const rewardQueueKeypair: Keypair = anchor.web3.Keypair.generate();
-    let rewardQueueElSize: number = 1; // TODO get from the program (if it's possible)
-    let rewardQueueMetadata: number = 12; // TODO get from the program (if it's possible)
+    const configHistoryLength = 10;
+    // TODO replace to PDA
+    const configHistoryKeypair: Keypair = anchor.web3.Keypair.generate();
+    let configHistoryElSize: number = 16; // TODO get from the program
+    let configHistoryMetadata: number = 8 + 16 * 3; // TODO get from the program
 
     let rewardTokenMint: PublicKey;
     let stakeTokenMint: PublicKey;
 
     let factoryPDA: PublicKey;
     let stakePoolFixedPDA: PublicKey;
+    let stakePoolConfigPDA: PublicKey;
+
+    it("Creates reward and stake mints", async () => {
+        owner = await createUserWithLamports(connection, 10);
+        rewardTokenMint = await createTokenMint(connection, owner.publicKey, owner, 6);
+        stakeTokenMint = await createTokenMint(connection, owner.publicKey, owner, 9);
+    });
 
     it("Initializes factory!", async () => {
-        owner = await createUserWithLamports(connection, 10);
-
-        // TODO get the seed value form the program Factory.PDA_KEY
         const [_factoryPDA, _factoryBump] = await PublicKey.findProgramAddress(
             [anchor.utils.bytes.utf8.encode("factory")],
             program.programId
@@ -53,21 +56,15 @@ describe("staking", () => {
             owner.publicKey,
             ownerInterest,
             confifChangeDelay,
-            rewardQueueLength,
+            rewardTokenMint, 
+            stakeTokenMint,
             {
                 accounts: {
                     factory: factoryPDA,
-                    rewardQueue: rewardQueueKeypair.publicKey,
                     initializer: owner.publicKey,
                     systemProgram: SystemProgram.programId,
                 },
-                signers: [owner, rewardQueueKeypair],
-                preInstructions: [
-                    await program.account.rewardQueue.createInstruction(
-                        rewardQueueKeypair, 
-                        rewardQueueLength * rewardQueueElSize + rewardQueueMetadata
-                    ),
-                ]
+                signers: [owner],
             }
         );
 
@@ -75,47 +72,69 @@ describe("staking", () => {
 
         expect(`${factory.owner}`).to.be.eq(`${owner.publicKey}`);
         expect(factory.ownerInterest).to.be.eq(ownerInterest);
-        expect(`${factory.rewardQueue}`).to.be.eq(`${rewardQueueKeypair.publicKey}`);
         expect(`${factory.configChangeDelay}`).to.be.eq(`${confifChangeDelay}`);
-    });
-
-    it("Creates reward and stake mints", async () => {
-        rewardTokenMint = await createTokenMint(connection, owner.publicKey, owner, 6);
-        stakeTokenMint = await createTokenMint(connection, owner.publicKey, owner, 9);
+        expect(`${factory.rewardTokenMint}`).to.be.eq(`${rewardTokenMint}`);
+        expect(`${factory.stakeTokenMint}`).to.be.eq(`${stakeTokenMint}`);
     });
 
     it("Creates new staking pool instance with fixed rewards", async () => {
-        // TODO get the seed value form the program StakePool.PDA_SEED_FIXED
         const [_stakePoolFixedPDA, _spfBump] = await PublicKey.findProgramAddress(
             [anchor.utils.bytes.utf8.encode("stake-pool-fixed")],
             program.programId
         );
         stakePoolFixedPDA = _stakePoolFixedPDA;
 
-        const stakePoolConfig: StakePoolConfig = newSPFixedConfig(rewardTokenMint, stakeTokenMint);
+        const [_stakePoolConfigPDA, _spcBump] = await PublicKey.findProgramAddress(
+            [
+                anchor.utils.bytes.utf8.encode("0"),
+                anchor.utils.bytes.utf8.encode("stake-pool-config-fixed")
+            ],
+            program.programId
+        );
+        stakePoolConfigPDA = _stakePoolConfigPDA;
+
+        const configTemplate: StakePoolConfig = newSPFixedConfig(configHistoryLength);
 
         await program.rpc.new(
-            ...Object.values(stakePoolConfig),
+            ...Object.values(configTemplate),
             {
                 accounts: {
                     factory: factoryPDA,
                     stakePool: stakePoolFixedPDA,
+                    stakePoolConfig: stakePoolConfigPDA,
+                    configHistory: configHistoryKeypair.publicKey,
                     owner: owner.publicKey,
                     clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
                     systemProgram: SystemProgram.programId,
                 },
-                signers: [owner]
+                signers: [owner, configHistoryKeypair],
+                preInstructions: [
+                    await program.account.configHistory.createInstruction(
+                        configHistoryKeypair, 
+                        configHistoryLength * configHistoryElSize + configHistoryMetadata
+                    ),
+                ]
             }
         );
 
         const stakePool = await program.account.stakePool.fetch(stakePoolFixedPDA);
+        const configHistory = await program.account.configHistory.fetch(configHistoryKeypair.publicKey);
+        const stakePoolConfig = await program.account.stakePoolConfig.fetch(stakePoolConfigPDA);
 
-        expect(`${stakePool.unstakeDelay}`).to.be.eq(`${stakePoolConfig.unstakeDelay}`);
-        expect(stakePool.unstakeForseFeePercent).to.be.eq(stakePoolConfig.unstakeForseFeePercent);
-        expect(`${stakePool.rewardPeriod}`).to.be.eq(`${stakePoolConfig.rewardPeriod}`);
-        expect(`${stakePool.rewardTokenMint}`).to.be.eq(`${stakePoolConfig.rewardTokenMint}`);
-        expect(`${stakePool.stakeTokenMint}`).to.be.eq(`${stakePoolConfig.stakeTokenMint}`);
-        expect(stakePool.rewardType).to.be.eq(stakePoolConfig.rewardType);
-        expect(`${stakePool.rewardMetadata}`).to.be.eq(`${stakePoolConfig.rewardMetadata}`);
+        expect(`${stakePool.configHistory}`).to.be.eq(`${configHistoryKeypair.publicKey}`);
+        expect(`${configHistory.history[0]}`).to.be.eq(`${stakePoolConfigPDA}`);
+
+        for (let i = 1; i < configHistoryLength; i++) {
+            expect(configHistory.history[i], `el № ${i}`).to.be.eq(null);
+        }
+
+        expect(`${stakePoolConfig.totalStakedTokens}`).to.be.eq(`${0}`);
+        expect(`${stakePoolConfig.unstakeDelay}`).to.be.eq(`${configTemplate.unstakeDelay}`);
+        expect(`${stakePoolConfig.unstakeForseFeePercent}`).to.be
+            .eq(`${configTemplate.unstakeForseFeePercent}`);
+        expect(`${stakePoolConfig.rewardPeriod}`).to.be.eq(`${configTemplate.rewardPeriod}`);
+        expect(stakePoolConfig.rewardType).to.be.eq(configTemplate.rewardType);
+        expect(`${stakePoolConfig.rewardMetadata}`).to.be
+            .eq(`${configTemplate.rewardMetadata}`);
     });
 });

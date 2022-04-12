@@ -11,8 +11,6 @@ pub struct Initialize<'info> {
         bump,
     )]
     pub factory: Account<'info, Factory>,
-    #[account(zero)]
-    pub reward_queue: Account<'info, RewardQueue>,
     #[account(mut)]
     pub initializer: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -31,6 +29,19 @@ pub struct NewStakePool<'info> {
         bump,
     )]
     pub stake_pool: Account<'info, StakePool>,
+    #[account(
+        init, 
+        payer = owner,
+        space = 8 + StakePoolConfig::SPACE,
+        seeds = [
+            b"0",
+            StakePoolConfig::PDA_SEED_FIXED,
+        ],
+        bump,
+    )]
+    pub stake_pool_config: Account<'info, StakePoolConfig>,
+    #[account(zero)]
+    pub config_history: Account<'info, ConfigHistory>,
     #[account(mut)]
     pub owner: Signer<'info>,
     pub clock: Sysvar<'info, Clock>,

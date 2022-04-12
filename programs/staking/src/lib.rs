@@ -17,7 +17,8 @@ pub mod staking {
         owner: Pubkey,
         owner_interest: u8,
         config_change_delay: u128,
-        reward_queue_length: u32,
+        reward_token_mint: Pubkey,
+        stake_token_mint: Pubkey,
     ) -> Result<()> {
         let factory = &mut ctx.accounts.factory;
 
@@ -25,11 +26,8 @@ pub mod staking {
         factory.owner = owner;
         factory.owner_interest = owner_interest;
         factory.config_change_delay = config_change_delay;
-        factory.reward_queue = ctx.accounts.reward_queue.to_account_info().key();
-
-        ctx.accounts.reward_queue
-            .events
-            .resize(reward_queue_length as usize, Default::default());
+        factory.reward_token_mint = reward_token_mint;
+        factory.stake_token_mint = stake_token_mint;
 
         Ok(())
     }
@@ -40,29 +38,38 @@ pub mod staking {
         unstake_delay: u64,
         unstake_forse_fee_percent: u8,
         reward_period: u64,
-        reward_token_mint: Pubkey,
-        stake_token_mint: Pubkey,
         reward_type: u8, // RewardType enum
         reward_metadata: u128, // Could be any data depending on the `reward_type`
+        config_history_length: u32,
     ) -> Result<()> {
         if ctx.accounts.owner.key() != ctx.accounts.factory.owner {
             return err!(SPError::NewPoolOwnerMistmatch)
         }
 
-        let stake_pool = &mut ctx.accounts.stake_pool;
-
         if RewardType::from(reward_type) == RewardType::Undefined {
             return err!(SPError::RewardTypeMismatch)
         }
 
-        stake_pool.unstake_delay = unstake_delay;
-        stake_pool.unstake_forse_fee_percent = unstake_forse_fee_percent;
-        stake_pool.reward_period = reward_period;
-        stake_pool.reward_token_mint = reward_token_mint;
-        stake_pool.stake_token_mint = stake_token_mint;
-        stake_pool.last_config_change = ctx.accounts.clock.unix_timestamp;
-        stake_pool.reward_metadata = reward_metadata;
-        stake_pool.reward_type = reward_type;
+        let stake_pool_config = &mut ctx.accounts.stake_pool_config;
+
+        stake_pool_config.unstake_delay = unstake_delay;
+        stake_pool_config.unstake_forse_fee_percent = unstake_forse_fee_percent;
+        stake_pool_config.reward_period = reward_period;
+        stake_pool_config.created_at = ctx.accounts.clock.unix_timestamp;
+        stake_pool_config.last_config_change = ctx.accounts.clock.unix_timestamp;
+        stake_pool_config.reward_metadata = reward_metadata;
+        stake_pool_config.reward_type = reward_type;
+
+        let stake_pool = &mut ctx.accounts.stake_pool;
+        stake_pool.config_history = ctx.accounts.config_history.to_account_info().key();
+
+        let config_history = &mut ctx.accounts.config_history;
+
+        config_history
+            .history
+            .resize(config_history_length as usize, None);
+
+        config_history.append(stake_pool_config.to_account_info().key());
 
         Ok(())
     }
@@ -105,6 +112,7 @@ pub mod staking {
         _amount: u128, // The amount of tokens to stake
     ) -> Result<()> {
         // TODO set timestamp when the staking begins
+        // TODO update total_staked_tokens in the stake pool config
         unimplemented!()
     }
 
