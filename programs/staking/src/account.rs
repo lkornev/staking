@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-/// The factory program main state.
+/// The program main state.
 #[account]
 pub struct Factory {
     pub bump: u8,
@@ -26,7 +26,6 @@ impl Factory {
     pub const PDA_SEED: & 'static [u8] = Factory::PDA_KEY.as_bytes();
 }
 
-/// The config describes the behaviour of the staking pool instance.
 #[account]
 pub struct StakePool {
     /// Storage of the config changes
@@ -121,13 +120,11 @@ pub struct StakePoolConfig{
     /// in proportion to the user's staked tokens among all stakeholders.
     /// Should be greather than 0.
     pub reward_type: u8,
-    pub reward_metadata: u128, // TODO change to Pubkey ?
+    pub reward_metadata: u128,
 }
 
 impl StakePoolConfig {
-    pub const SPACE: usize = 8 + 8 + 16 + 8 + 1 + 8 + 1 + 16; // TODO remove extra 100
-    pub const PDA_SEED_FIXED: & 'static [u8] = b"stake-pool-config-fixed";
-    pub const PDA_SEED_UNFIXED: & 'static [u8] = b"stake-pool-config-unfixed";
+    pub const SPACE: usize = 8 + 8 + 16 + 8 + 1 + 8 + 1 + 16;
 }
 
 /// Stakeholder account represents a stake state.

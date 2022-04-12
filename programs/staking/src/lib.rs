@@ -80,11 +80,12 @@ pub mod staking {
     /// The program cannot transfer any staked tokens without the user's signed request.
     /// 
     /// Tokens inside `free vault` don't bring any rewards.
-    /// To start getting rewards user can stake his tokens
+    /// To start getting rewards user can stake one's tokens
     /// inside `free vault` by calling the `stake` method.
     pub fn deposit(
         _ctx: Context<Deposit>,
     ) -> Result<()> {
+        // TODO create a PDA Stakeholder account if it's not created for the current user
         unimplemented!()
     }
 
@@ -152,7 +153,7 @@ pub mod staking {
     }
 
     /// Change the config of the stake pool. 
-    /// Changing the config means replacing the config account in the StakePool struct.
+    /// Changing the config means pushing the new config account in the ConfigHistory.
     /// 
     /// The configuration of the stake program can be changed on the fly,
     /// therefore, before changing the configuration, 

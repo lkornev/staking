@@ -12,7 +12,7 @@ pub enum RewardType {
     /// Reward: 150 reward tokens per `reward_period`. ((300 / 1000) * 500)
     Unfixed = 1,
     /// This type is throwing the RewardTypeMismatch error.
-    Undefined = 255,
+    Undefined = 255, // TODO remove
 }
 
 impl From<u8> for RewardType {
@@ -20,7 +20,7 @@ impl From<u8> for RewardType {
         match orig {
             0 => return RewardType::Fixed,
             1 => return RewardType::Unfixed,
-            _ => return RewardType::Undefined,
-        };
+            _ => return RewardType::Undefined, // TODO remove
+        }
     }
 }

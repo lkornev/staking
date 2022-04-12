@@ -34,8 +34,8 @@ pub struct NewStakePool<'info> {
         payer = owner,
         space = 8 + StakePoolConfig::SPACE,
         seeds = [
-            b"0",
-            StakePoolConfig::PDA_SEED_FIXED,
+            b"0", // Index in the Config Histroy
+            stake_pool.to_account_info().key.as_ref(),
         ],
         bump,
     )]

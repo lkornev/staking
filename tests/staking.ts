@@ -14,6 +14,7 @@ import {
     Signer,
 } from '@solana/web3.js';
 import { expect, assert } from 'chai';
+import { RewardType } from "./reward";
 
 describe("staking", () => {
     anchor.setProvider(anchor.Provider.env());
@@ -86,8 +87,8 @@ describe("staking", () => {
 
         const [_stakePoolConfigPDA, _spcBump] = await PublicKey.findProgramAddress(
             [
-                anchor.utils.bytes.utf8.encode("0"),
-                anchor.utils.bytes.utf8.encode("stake-pool-config-fixed")
+                anchor.utils.bytes.utf8.encode("0"), // Index in the Config Histroy
+                stakePoolFixedPDA.toBuffer()
             ],
             program.programId
         );
