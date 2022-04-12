@@ -1,4 +1,7 @@
-use std::convert::TryFrom;
+use std::convert::TryFrom; 
+use crate::SPError;
+use anchor_lang::err;
+use anchor_lang::prelude::Error;
 
 #[derive(PartialEq, Eq)]
 pub enum RewardType {
@@ -16,13 +19,13 @@ pub enum RewardType {
 }
 
 impl TryFrom<u8> for RewardType {
-    type Error = &'static str;
+    type Error = Error;
 
     fn try_from(orig: u8) -> Result<Self, Self::Error> {
         match orig {
-            0 => return Ok(RewardType::Fixed),
-            1 => return Ok(RewardType::Unfixed),
-            _ => Err("This reward type is not supported"),
+            0 => Ok(RewardType::Fixed),
+            1 => Ok(RewardType::Unfixed),
+            _ => err!(SPError::RewardTypeMismatch),
         }
     }
 }

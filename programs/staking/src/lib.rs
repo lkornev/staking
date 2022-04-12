@@ -47,9 +47,9 @@ pub mod staking {
     ) -> Result<()> {
         if ctx.accounts.owner.key() != ctx.accounts.factory.owner {
             return err!(SPError::NewPoolOwnerMistmatch)
-        } else if RewardType::try_from(reward_type).is_err() {
-            return err!(SPError::RewardTypeMismatch)
         }
+
+        RewardType::try_from(reward_type)?;
 
         let stake_pool_config = &mut ctx.accounts.stake_pool_config;
 
@@ -77,18 +77,26 @@ pub mod staking {
         Ok(())
     }
 
-    /// Transfers tokens from a user's external wallet to the user's internal `free vault`,
+    /// Transfers tokens from a user's external wallet to the user's internal `vault_free`,
     /// that belongs to the user, but controlled by the program.
-    /// User can freely deposit and withdraw tokens to/from the `free vault`.
+    /// User can freely deposit and withdraw tokens to/from the `vault_free`.
     /// The program cannot transfer any staked tokens without the user's signed request.
     /// 
-    /// Tokens inside `free vault` don't bring any rewards.
+    /// Tokens inside `vault_free` don't bring any rewards.
     /// To start getting rewards user can stake one's tokens
-    /// inside `free vault` by calling the `stake` method.
+    /// inside `vault_free` by calling the `stake` method.
     pub fn deposit(
-        _ctx: Context<Deposit>,
+        ctx: Context<Deposit>,
+        amount: u128, // The amount of tokens to deposit
     ) -> Result<()> {
-        // TODO implement
+        let stakeholder = &mut ctx.accounts.stakeholder;
+
+        stakeholder.owner = *ctx.accounts.beneficiary.key;
+        stakeholder.vault_free = (*ctx.accounts.vault_free).key();
+        stakeholder.vault_pending_unstaking = (*ctx.accounts.vault_pending_unstaking).key();
+
+        // TODO transfer tokens form beneficiary vault to vault_free
+
         Ok(())
     }
 

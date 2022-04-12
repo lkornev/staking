@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::account::*;
+use anchor_spl::token::TokenAccount;
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -66,6 +67,19 @@ pub struct Deposit<'info> {
         bump,
     )]
     pub stakeholder: Account<'info, Stakeholder>,
+    #[account(
+        mut, 
+        // TODO add error with useful text
+        constraint = vault_free.owner == stakeholder.to_account_info().key(),
+    )]
+    pub vault_free: Box<Account<'info, TokenAccount>>,
+    #[account(
+        mut,
+        // TODO add error with useful text
+        constraint = vault_pending_unstaking.owner == stakeholder.to_account_info().key(), 
+        constraint = vault_pending_unstaking.mint == vault_free.mint,
+    )]
+    pub vault_pending_unstaking: Box<Account<'info, TokenAccount>>,
     #[account(mut)]
     pub beneficiary: Signer<'info>,
     pub system_program: Program<'info, System>,

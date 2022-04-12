@@ -13,8 +13,20 @@ import {
     Connection,
     Signer,
 } from '@solana/web3.js';
+import { 
+    createMint,
+    TOKEN_PROGRAM_ID, 
+    createAccount as createTokenAccount,
+    getOrCreateAssociatedTokenAccount,
+    Account as TokenAccount,
+    mintTo,
+    getAccount,
+    createApproveInstruction,
+    NATIVE_MINT,
+} from '@solana/spl-token';
 import { expect, assert } from 'chai';
 import { RewardType } from "./reward";
+
 
 describe("staking", () => {
     anchor.setProvider(anchor.Provider.env());
@@ -24,7 +36,6 @@ describe("staking", () => {
     const program = anchor.workspace.Staking as Program<Staking>;
 
     let owner: Signer;
-    let beneficiary: Signer;
     const ownerInterest = 1; // %
     const confifChangeDelay = new BN(20); // secs
 
@@ -40,7 +51,6 @@ describe("staking", () => {
     let factoryPDA: PublicKey;
     let stakePoolFixedPDA: PublicKey;
     let stakePoolConfigPDA: PublicKey;
-    let stakeholderPDA: PublicKey;
 
     it("Creates reward and stake mints", async () => {
         owner = await createUserWithLamports(connection, 10);
@@ -142,9 +152,36 @@ describe("staking", () => {
             .eq(`${configTemplate.rewardMetadata}`);
     });
 
-    it("Deposits tokens", async () => {
+    let beneficiary: Signer;
+    let beneficiaryTokenAccount: TokenAccount;
+    const stakeTokenAmount = 1000;
+    const amountToDeposit = new BN(stakeTokenAmount);
+
+    let vaultFree: Keypair;
+    let vaultPendingUnstaking: Keypair;
+    let stakeholderPDA: PublicKey;
+
+    it("Create stakeholder PDA and token vaults", async () => {
         beneficiary = await createUserWithLamports(connection, 1);
-        // TODO mint stake tokens to beneficiary
+
+        beneficiaryTokenAccount = await getOrCreateAssociatedTokenAccount(
+            connection,
+            beneficiary, // Payer
+            stakeTokenMint,
+            beneficiary.publicKey, // Owner
+        );
+
+        await mintTo(
+            connection,
+            owner,  // Payer
+            stakeTokenMint,
+            beneficiaryTokenAccount.address, // mint to
+            owner, // Authority
+            stakeTokenAmount,
+        );
+
+        vaultFree = anchor.web3.Keypair.generate();
+        vaultPendingUnstaking = anchor.web3.Keypair.generate();
 
         const [_stakeholderPDA, _stakeholderBump] = await PublicKey.findProgramAddress(
             [
@@ -155,16 +192,48 @@ describe("staking", () => {
         );
         stakeholderPDA = _stakeholderPDA;
 
+        await createTokenAccount(
+            connection,
+            beneficiary, // Payer
+            stakeTokenMint,
+            stakeholderPDA, // Owner
+            vaultFree, // Keypair
+        );
+
+        await createTokenAccount(
+            connection,
+            beneficiary, // Payer
+            stakeTokenMint,
+            stakeholderPDA, // Owner
+            vaultPendingUnstaking, // Keypair
+        );
+
+        const beneficiaryAccountState = await getAccount(connection, beneficiaryTokenAccount.address);
+        const stakeholderVaultFree = await getAccount(connection, vaultFree.publicKey);
+        const stakeholderVaultPU = await getAccount(connection, vaultPendingUnstaking.publicKey);
+
+        expect(`${beneficiaryAccountState.amount}`).to.be.eq(`${stakeTokenAmount}`);
+        expect(`${stakeholderVaultFree.amount}`).to.be.eq(`0`);
+        expect(`${stakeholderVaultPU.amount}`).to.be.eq(`0`);
+    });
+
+    it("Deposits tokens", async () => {
         await program.rpc.deposit(
+            amountToDeposit,
             {
                 accounts: {
                     stakePool: stakePoolFixedPDA,
                     beneficiary: beneficiary.publicKey,
                     stakeholder: stakeholderPDA,
+                    vaultFree: vaultFree.publicKey,
+                    vaultPendingUnstaking: vaultPendingUnstaking.publicKey,
                     systemProgram: SystemProgram.programId,
                 },
                 signers: [beneficiary],
             }
         );
+
+        // TODO check fields of the stakeholder struct
+        // TODO check internal vault_free and beneficiary external valut
     });
 });
