@@ -6,4 +6,6 @@ pub enum SPError {
     NewPoolOwnerMistmatch,
     #[msg("The reward type is unknown. Please check the RewardType.")]
     RewardTypeMismatch,
+    #[msg("The stake pool PDA account is invalid.")]
+    StakePoolPDAInvalid
 }

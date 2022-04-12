@@ -3,8 +3,9 @@ mod reward; use reward::*;
 mod account; use account::*;
 mod context; use context::*;
 mod error; use error::SPError;
+use std::convert::TryFrom;
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("5E1FrMGJa9S1qJHXVZKdhuu3WF8BrwzNdx1JKARyNbVm");
 
 #[program]
 pub mod staking {
@@ -20,6 +21,7 @@ pub mod staking {
         reward_token_mint: Pubkey,
         stake_token_mint: Pubkey,
     ) -> Result<()> {
+        msg!("HELLO!");
         let factory = &mut ctx.accounts.factory;
 
         factory.bump = *ctx.bumps.get(Factory::PDA_KEY).unwrap();
@@ -41,12 +43,11 @@ pub mod staking {
         reward_type: u8, // RewardType enum
         reward_metadata: u128, // Could be any data depending on the `reward_type`
         config_history_length: u32,
+        bump: u8,
     ) -> Result<()> {
         if ctx.accounts.owner.key() != ctx.accounts.factory.owner {
             return err!(SPError::NewPoolOwnerMistmatch)
-        }
-
-        if RewardType::from(reward_type) == RewardType::Undefined {
+        } else if RewardType::try_from(reward_type).is_err() {
             return err!(SPError::RewardTypeMismatch)
         }
 
@@ -61,7 +62,9 @@ pub mod staking {
         stake_pool_config.reward_type = reward_type;
 
         let stake_pool = &mut ctx.accounts.stake_pool;
-        stake_pool.config_history = ctx.accounts.config_history.to_account_info().key();
+        stake_pool.bump = bump;
+    
+        stake_pool.config_history = *ctx.accounts.config_history.to_account_info().key;
 
         let config_history = &mut ctx.accounts.config_history;
 
@@ -85,8 +88,8 @@ pub mod staking {
     pub fn deposit(
         _ctx: Context<Deposit>,
     ) -> Result<()> {
-        // TODO create a PDA Stakeholder account if it's not created for the current user
-        unimplemented!()
+        // TODO implement
+        Ok(())
     }
 
     /// Withdraw tokens from internal `free vault` controlled by the program

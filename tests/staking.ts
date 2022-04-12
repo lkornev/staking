@@ -24,6 +24,7 @@ describe("staking", () => {
     const program = anchor.workspace.Staking as Program<Staking>;
 
     let owner: Signer;
+    let beneficiary: Signer;
     const ownerInterest = 1; // %
     const confifChangeDelay = new BN(20); // secs
 
@@ -39,6 +40,7 @@ describe("staking", () => {
     let factoryPDA: PublicKey;
     let stakePoolFixedPDA: PublicKey;
     let stakePoolConfigPDA: PublicKey;
+    let stakeholderPDA: PublicKey;
 
     it("Creates reward and stake mints", async () => {
         owner = await createUserWithLamports(connection, 10);
@@ -79,7 +81,7 @@ describe("staking", () => {
     });
 
     it("Creates new staking pool instance with fixed rewards", async () => {
-        const [_stakePoolFixedPDA, _spfBump] = await PublicKey.findProgramAddress(
+        const [_stakePoolFixedPDA, spfBump] = await PublicKey.findProgramAddress(
             [anchor.utils.bytes.utf8.encode("stake-pool-fixed")],
             program.programId
         );
@@ -98,6 +100,7 @@ describe("staking", () => {
 
         await program.rpc.new(
             ...Object.values(configTemplate),
+            spfBump,
             {
                 accounts: {
                     factory: factoryPDA,
@@ -137,5 +140,31 @@ describe("staking", () => {
         expect(stakePoolConfig.rewardType).to.be.eq(configTemplate.rewardType);
         expect(`${stakePoolConfig.rewardMetadata}`).to.be
             .eq(`${configTemplate.rewardMetadata}`);
+    });
+
+    it("Deposits tokens", async () => {
+        beneficiary = await createUserWithLamports(connection, 1);
+        // TODO mint stake tokens to beneficiary
+
+        const [_stakeholderPDA, _stakeholderBump] = await PublicKey.findProgramAddress(
+            [
+                beneficiary.publicKey.toBuffer(),
+                stakePoolFixedPDA.toBuffer(),
+            ],
+            program.programId
+        );
+        stakeholderPDA = _stakeholderPDA;
+
+        await program.rpc.deposit(
+            {
+                accounts: {
+                    stakePool: stakePoolFixedPDA,
+                    beneficiary: beneficiary.publicKey,
+                    stakeholder: stakeholderPDA,
+                    systemProgram: SystemProgram.programId,
+                },
+                signers: [beneficiary],
+            }
+        );
     });
 });

@@ -1,3 +1,5 @@
+use std::convert::TryFrom;
+
 #[derive(PartialEq, Eq)]
 pub enum RewardType {
     /// A stakeholder will receive a fixed amount of reward tokens pro rata one's staked tokens.
@@ -11,16 +13,16 @@ pub enum RewardType {
     /// `reward_tokens_per_period`: 500.
     /// Reward: 150 reward tokens per `reward_period`. ((300 / 1000) * 500)
     Unfixed = 1,
-    /// This type is throwing the RewardTypeMismatch error.
-    Undefined = 255, // TODO remove
 }
 
-impl From<u8> for RewardType {
-    fn from(orig: u8) -> Self {
+impl TryFrom<u8> for RewardType {
+    type Error = &'static str;
+
+    fn try_from(orig: u8) -> Result<Self, Self::Error> {
         match orig {
-            0 => return RewardType::Fixed,
-            1 => return RewardType::Unfixed,
-            _ => return RewardType::Undefined, // TODO remove
+            0 => return Ok(RewardType::Fixed),
+            1 => return Ok(RewardType::Unfixed),
+            _ => Err("This reward type is not supported"),
         }
     }
 }

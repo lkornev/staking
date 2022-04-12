@@ -49,7 +49,27 @@ pub struct NewStakePool<'info> {
 }
 
 #[derive(Accounts)]
-pub struct Deposit {}
+pub struct Deposit<'info> {
+    #[account(
+        seeds = [StakePool::PDA_SEED_FIXED],
+        bump = stake_pool.bump,
+    )]
+    pub stake_pool: Account<'info, StakePool>,
+    #[account(
+        init_if_needed,
+        payer = beneficiary,
+        space = 8 + Stakeholder::SPACE,
+        seeds = [
+            beneficiary.to_account_info().key.as_ref(),
+            stake_pool.to_account_info().key.as_ref(),
+        ],
+        bump,
+    )]
+    pub stakeholder: Account<'info, Stakeholder>,
+    #[account(mut)]
+    pub beneficiary: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
 
 #[derive(Accounts)]
 pub struct Withdraw {}

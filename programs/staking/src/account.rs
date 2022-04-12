@@ -23,19 +23,22 @@ pub struct Factory {
 impl Factory {
     pub const SPACE: usize = 1 + 32 + 1 + 32 + 16 + 16 + 16; // TODO remove extra 16
     pub const PDA_KEY: &'static str = "factory";
-    pub const PDA_SEED: & 'static [u8] = Factory::PDA_KEY.as_bytes();
+    pub const PDA_SEED: & 'static [u8] = Self::PDA_KEY.as_bytes();
 }
 
 #[account]
 pub struct StakePool {
     /// Storage of the config changes
     pub config_history: Pubkey,
+    pub bump: u8,
 }
 
 impl StakePool {
-    pub const SPACE: usize = 32;
-    pub const PDA_SEED_FIXED: & 'static [u8] = b"stake-pool-fixed";
-    pub const PDA_SEED_UNFIXED: & 'static [u8] = b"stake-pool-unfixed";
+    pub const SPACE: usize = 32 + 8;
+    pub const PDA_KEY_FIXED: &'static str = "stake-pool-fixed";
+    pub const PDA_KEY_UNFIXED: &'static str = "stake-pool-unfixed";
+    pub const PDA_SEED_FIXED: & 'static [u8] = Self::PDA_KEY_FIXED.as_bytes();
+    pub const PDA_SEED_UNFIXED: & 'static [u8] = Self::PDA_KEY_UNFIXED.as_bytes();
 }
 
 #[account]
@@ -127,31 +130,24 @@ impl StakePoolConfig {
     pub const SPACE: usize = 8 + 8 + 16 + 8 + 1 + 8 + 1 + 16;
 }
 
-/// Stakeholder account represents a stake state.
+/// Stakeholder account represents a user of the stake pool factory program.
 #[account]
 pub struct Stakeholder {
-    /// User can freely deposit and withdraw tokens to or from the `free_vault`.
-    /// Tokens on the `free_vault` do not produce rewards.
+    /// The owner and beneficiary of the Stakeholder account.
+    pub owner: Pubkey,
+    /// User can freely deposit and withdraw tokens to or from the `vault_free`.
+    /// Tokens on the `vault_free` do not produce rewards.
     /// Used as a transit zone between external and internal wallets/vaults.
-    pub free_vault: Pubkey,
-    /// The amount of staked tokens that belongs to the user.
-    /// This valult is used to calculate the reward.
-    /// The tokens could be unstaked and transfered to `pending_unstaking_vault`.
-    pub stake_vault: Pubkey,
-    /// The tokens inside `pending_unstaking_vault` are not giving the rewards.
-    /// The tokens could be forsed to be transfered to `free_vault`
+    pub vault_free: Pubkey,
+    /// Tokens transfered to `vault_pending_unstaking` after calling `start_unstake` method.
+    /// The tokens inside `vault_pending_unstaking` are not giving the rewards any more.
+    /// The tokens could be forsed to be transfered to `vault_free` immediately
     /// by paying the `unstake_forse_fee_percent` penalty.
-    /// Or they could be transferred for free after the period of time 
-    /// defined in the `unstake_delay` variable in the Config. 
-    pub pending_unstaking_vault: Pubkey,
-    /// The owner of the Stakeholder account.
-    pub beneficiary: Pubkey,
-    /// StakePool the Stakeholder belongs to.
-    pub stake_pool: Pubkey,
-    /// Next position in the rewards event queue to process.
-    pub rewards_cursor: u32,
-    /// The clock timestamp of the last time this account staked or switched
-    /// entities. Used as a proof to reward vendors that the Member account
-    /// was staked at a given point in time.
-    pub last_stake_timestamp: u128,
+    /// Or they could be transferred for free after the period of time
+    /// defined in the `unstake_delay` variable in the StakePoolConfig. 
+    pub vault_pending_unstaking: Pubkey,
+}
+
+impl Stakeholder {
+    pub const SPACE: usize = 32 * 3;
 }
