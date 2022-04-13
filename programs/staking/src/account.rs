@@ -4,9 +4,9 @@ use anchor_lang::prelude::*;
 #[account]
 pub struct Factory {
     pub bump: u8,
-    /// The owner of the stake pool program instance.
+    /// The owner of the stake pool factory program.
     pub owner: Pubkey,
-    /// The percentage of reward tokens the owner will receive for users stakes.
+    /// The percentage of reward tokens the owner will receive from each user's reward.
     pub owner_interest: u8,
     /// The amount of seconds should be passed before the next config change is allowed.
     pub config_change_delay: u128,
@@ -21,7 +21,7 @@ pub struct Factory {
 }
 
 impl Factory {
-    pub const SPACE: usize = 1 + 32 + 1 + 32 + 16 + 16 + 16; // TODO remove extra 16
+    pub const SPACE: usize = 1 + 32 + 1 + 16 + 32 + 32;
     pub const PDA_KEY: &'static str = "factory";
     pub const PDA_SEED: & 'static [u8] = Self::PDA_KEY.as_bytes();
 }
@@ -161,5 +161,5 @@ pub struct Stakeholder {
 }
 
 impl Stakeholder {
-    pub const SPACE: usize = 32 * 2;
+    pub const SPACE: usize = 32 * 2 + 8;
 }
