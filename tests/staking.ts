@@ -314,6 +314,6 @@ describe("staking", () => {
         expect(`${memberVaultFree.amount}`).to.be.eq(`${0}`);
 
         const stakeholderVaultChanged = await getTokenAccount(connection, vaultStaked.publicKey);
-        expect(`${stakeholderVaultChanged.amount}`).to.be.eq(`amountToStake`);
+        expect(`${stakeholderVaultChanged.amount}`).to.be.eq(`${amountToStake}`);
     });
 });

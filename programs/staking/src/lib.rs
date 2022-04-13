@@ -140,12 +140,11 @@ pub mod staking {
         stakeholder.bump = stakeholder_bump;
 
         let seeds = &[
-            ctx.accounts.member.to_account_info().key.as_ref(),
-            ctx.accounts.stake_pool.to_account_info().key.as_ref(),
-            &[stakeholder_bump]
+            ctx.accounts.beneficiary.to_account_info().key.as_ref(),
+            ctx.accounts.factory.to_account_info().key.as_ref(),
+            &[ctx.accounts.member.bump]
         ];
 
-        // TODO fix Cross-program invocation with unauthorized signer or writable account
         token::transfer(
             CpiContext::new_with_signer(
                 token_program,
