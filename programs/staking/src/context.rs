@@ -59,24 +59,23 @@ pub struct Deposit<'info> {
     #[account(
         init_if_needed,
         payer = beneficiary,
-        space = 8 + Stakeholder::SPACE,
+        space = 8 + Member::SPACE,
         seeds = [
             beneficiary.to_account_info().key.as_ref(),
             stake_pool.to_account_info().key.as_ref(),
         ],
         bump,
     )]
-    pub stakeholder: Account<'info, Stakeholder>,
+    pub member: Account<'info, Member>,
     #[account(
         mut, 
         // TODO add an error with useful text
-        constraint = vault_free.owner == stakeholder.to_account_info().key(),
+        constraint = vault_free.owner == member.to_account_info().key(),
     )]
     pub vault_free: Box<Account<'info, TokenAccount>>,
     #[account(
-        mut,
         // TODO add errors with useful text
-        constraint = vault_pending_unstaking.owner == stakeholder.to_account_info().key(), 
+        constraint = vault_pending_unstaking.owner == member.to_account_info().key(), 
         constraint = vault_pending_unstaking.mint == vault_free.mint,
     )]
     pub vault_pending_unstaking: Box<Account<'info, TokenAccount>>,
@@ -93,7 +92,41 @@ pub struct Deposit<'info> {
 pub struct Withdraw {}
 
 #[derive(Accounts)]
-pub struct Stake {}
+pub struct Stake<'info> {
+    #[account(
+        seeds = [StakePool::PDA_SEED_FIXED],
+        bump = stake_pool.bump,
+    )]
+    pub stake_pool: Account<'info, StakePool>,
+    #[account(
+        seeds = [
+            beneficiary.to_account_info().key.as_ref(),
+            stake_pool.to_account_info().key.as_ref(),
+        ],
+        bump = member.bump,
+    )]
+    pub member: Account<'info, Member>,
+    #[account(
+        mut, 
+        // TODO add an error with useful text
+        constraint = vault_free.owner == member.to_account_info().key(),
+    )]
+    pub vault_free: Box<Account<'info, TokenAccount>>,
+    #[account(
+        mut,
+        // TODO add errors with useful text
+        constraint = vault_pending_unstaking.owner == member.to_account_info().key(), 
+        constraint = vault_pending_unstaking.mint == vault_free.mint,
+    )]
+    pub vault_pending_unstaking: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    pub beneficiary: Signer<'info>,
+    /// CHECK: used only for transfer tokens from by the signed beneficiary instraction.
+    #[account(mut)]
+    pub beneficiary_token_account: AccountInfo<'info>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+}
 
 #[derive(Accounts)]
 pub struct StartUnstake {}

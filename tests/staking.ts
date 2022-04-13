@@ -159,9 +159,10 @@ describe("staking", () => {
 
     let vaultFree: Keypair;
     let vaultPendingUnstaking: Keypair;
-    let stakeholderPDA: PublicKey;
+    let memberPDA: PublicKey;
+    let memberBump: number;
 
-    it("Create stakeholder PDA and token vaults", async () => {
+    it("Create member PDA and token vaults", async () => {
         beneficiary = await createUserWithLamports(connection, 1);
 
         beneficiaryTokenAccount = await getOrCreateAssociatedTokenAccount(
@@ -183,20 +184,20 @@ describe("staking", () => {
         vaultFree = anchor.web3.Keypair.generate();
         vaultPendingUnstaking = anchor.web3.Keypair.generate();
 
-        const [_stakeholderPDA, _stakeholderBump] = await PublicKey.findProgramAddress(
+        const [_memberPDA, memberBump] = await PublicKey.findProgramAddress(
             [
                 beneficiary.publicKey.toBuffer(),
                 stakePoolFixedPDA.toBuffer(),
             ],
             program.programId
         );
-        stakeholderPDA = _stakeholderPDA;
+        memberPDA = _memberPDA;
 
         await createTokenAccount(
             connection,
             beneficiary, // Payer
             stakeTokenMint,
-            stakeholderPDA, // Owner
+            memberPDA, // Owner
             vaultFree, // Keypair
         );
 
@@ -204,28 +205,29 @@ describe("staking", () => {
             connection,
             beneficiary, // Payer
             stakeTokenMint,
-            stakeholderPDA, // Owner
+            memberPDA, // Owner
             vaultPendingUnstaking, // Keypair
         );
 
         const beneficiaryAccountState = await getTokenAccount(connection, beneficiaryTokenAccount.address);
-        const stakeholderVaultFree = await getTokenAccount(connection, vaultFree.publicKey);
-        const stakeholderVaultPU = await getTokenAccount(connection, vaultPendingUnstaking.publicKey);
+        const memberVaultFree = await getTokenAccount(connection, vaultFree.publicKey);
+        const memberVaultPU = await getTokenAccount(connection, vaultPendingUnstaking.publicKey);
 
         expect(`${beneficiaryAccountState.amount}`).to.be.eq(`${stakeTokenAmount}`);
-        expect(`${stakeholderVaultFree.amount}`).to.be.eq(`0`);
-        expect(`${stakeholderVaultPU.amount}`).to.be.eq(`0`);
+        expect(`${memberVaultFree.amount}`).to.be.eq(`0`);
+        expect(`${memberVaultPU.amount}`).to.be.eq(`0`);
     });
 
     it("Deposits tokens", async () => {
         await program.rpc.deposit(
             amountToDeposit,
+            memberBump,
             {
                 accounts: {
                     stakePool: stakePoolFixedPDA,
                     beneficiary: beneficiary.publicKey,
                     beneficiaryTokenAccount: beneficiaryTokenAccount.address,
-                    stakeholder: stakeholderPDA,
+                    member: memberPDA,
                     vaultFree: vaultFree.publicKey,
                     vaultPendingUnstaking: vaultPendingUnstaking.publicKey,
                     systemProgram: SystemProgram.programId,
@@ -235,18 +237,18 @@ describe("staking", () => {
             }
         );
 
-        const stakeholder = await program.account.stakeholder.fetch(stakeholderPDA);
+        const member = await program.account.member.fetch(memberPDA);
 
-        expect(`${stakeholder.owner}`).to.be.eq(`${beneficiary.publicKey}`);
-        expect(`${stakeholder.vaultFree}`).to.be.eq(`${vaultFree.publicKey}`);
-        expect(`${stakeholder.vaultPendingUnstaking}`).to.be.eq(`${vaultPendingUnstaking.publicKey}`);
+        expect(`${member.owner}`).to.be.eq(`${beneficiary.publicKey}`);
+        expect(`${member.vaultFree}`).to.be.eq(`${vaultFree.publicKey}`);
+        expect(`${member.vaultPendingUnstaking}`).to.be.eq(`${vaultPendingUnstaking.publicKey}`);
 
         const beneficiaryAccountState = await getTokenAccount(connection, beneficiaryTokenAccount.address);
-        const stakeholderVaultFree = await getTokenAccount(connection, stakeholder.vaultFree);
+        const memberVaultFree = await getTokenAccount(connection, member.vaultFree);
 
         console.log("beneficiaryAccountState: ", beneficiaryAccountState);
-        console.log("stakeholderVaultFree: ", stakeholderVaultFree);
+        console.log("member: ", memberVaultFree);
         expect(`${beneficiaryAccountState.amount}`).to.be.eq(`0`);
-        expect(`${stakeholderVaultFree.amount}`).to.be.eq(`${stakeTokenAmount}`);
+        expect(`${memberVaultFree.amount}`).to.be.eq(`${stakeTokenAmount}`);
     });
 });

@@ -89,12 +89,14 @@ pub mod staking {
     pub fn deposit(
         ctx: Context<Deposit>,
         amount: u64, // The amount of tokens to deposit
+        bump: u8,
     ) -> Result<()> {
-        let stakeholder = &mut ctx.accounts.stakeholder;
+        let member = &mut ctx.accounts.member;
 
-        stakeholder.owner = *ctx.accounts.beneficiary.key;
-        stakeholder.vault_free = (*ctx.accounts.vault_free).key();
-        stakeholder.vault_pending_unstaking = (*ctx.accounts.vault_pending_unstaking).key();
+        member.owner = *ctx.accounts.beneficiary.key;
+        member.vault_free = (*ctx.accounts.vault_free).key();
+        member.vault_pending_unstaking = (*ctx.accounts.vault_pending_unstaking).key();
+        member.bump = bump;
 
         let token_program = ctx.accounts.token_program.to_account_info();
         let from = ctx.accounts.beneficiary_token_account.to_account_info();
@@ -108,6 +110,56 @@ pub mod staking {
             ), 
             amount
         )
+    }
+
+    /// Moves tokens from the `vault free` to the `stake valut`
+    /// Tokens inside `stake valut` allow to get rewards pro rata staked amount.
+    /// Member can stake coins from one's `vault free` to any stake.
+    /// Member must claim the rewards before staking more tokens to the same pool. (TODO Check)
+    pub fn stake(
+        _ctx: Context<Stake>,
+        _amount: u128, // The amount of tokens to stake
+    ) -> Result<()> {
+        // TODO set timestamp when the staking begins
+        // TODO update total_staked_tokens in the stake pool config
+        unimplemented!()
+    }
+
+    /// Deposit a reward for stakers.
+    /// The reward is distributed on demand pro rata staked tokens.
+    pub fn send_reward(
+        _ctx: Context<DropReward>,
+    ) -> Result<()> {
+        // Transfer rewards to the stake pool factory.
+        unimplemented!()
+    }
+
+    /// Claims a reward for staked tokens.
+    pub fn claim_reward(
+        _ctx: Context<ClaimReward>,
+    ) -> Result<()> {
+        // Iterate received stake pool config history and get rewards
+        unimplemented!()
+    }
+
+    /// Moves tokens from the `staked vault` to the `pending unstaking vault`.
+    /// Saves data to finish unstaking in the `pending unstaking` account provided by the user.
+    /// The `pending unstaking` account must belongs to the user.
+    /// Member must claim the rewards before unstaking tokens. (TODO Check)
+    pub fn start_unstake(
+        _ctx: Context<StartUnstake>,
+    ) -> Result<()> {
+        unimplemented!()
+    }
+
+    /// Moves tokens from `pending unstaking vault` to `free vault`.
+    pub fn finish_unstake(
+        _ctx: Context<FinishUnstake>,
+        // Unstake immediately without waiting for `unstake_delay` by paying the `unstake_forse_fee`
+        _forse: bool,
+    ) -> Result<()> {
+        // TODO if unstake_forse_fee === 0 or unstake_delay passed, than ignore forse flag
+        unimplemented!()
     }
 
     /// Withdraw tokens from internal `free vault` controlled by the program
@@ -126,65 +178,18 @@ pub mod staking {
         unimplemented!()
     }
 
-    /// Moves tokens from the `free vault` to the `staked valut`
-    /// Tokens inside `staked valut` allow to get rewards pro rata staked amount.
-    /// Stakeholder must claim the rewards before staking more tokens. (TODO Check)
-    pub fn stake(
-        _ctx: Context<Stake>,
-        _amount: u128, // The amount of tokens to stake
-    ) -> Result<()> {
-        // TODO set timestamp when the staking begins
-        // TODO update total_staked_tokens in the stake pool config
-        unimplemented!()
-    }
-
-    /// Moves tokens from the `staked vault` to the `pending unstaking vault`.
-    /// Saves data to finish unstaking in the `pending unstaking` account provided by the user.
-    /// The `pending unstaking` account must belongs to the user.
-    /// Stakeholder must claim the rewards before unstaking tokens. (TODO Check)
-    pub fn start_unstake(
-        _ctx: Context<StartUnstake>,
-    ) -> Result<()> {
-        unimplemented!()
-    }
-
-    /// Moves tokens from `pending unstaking vault` to `free vault`.
-    pub fn finish_unstake(
-        _ctx: Context<FinishUnstake>,
-        // Unstake immediately without waiting for `unstake_delay` by paying the `unstake_forse_fee`
-        _forse: bool,
-    ) -> Result<()> {
-        // TODO if unstake_forse_fee === 0 or unstake_delay passed, than ignore forse flag
-        unimplemented!()
-    }
-
-    /// Claims a reward for staked tokens.
-    pub fn claim_reward(
-        _ctx: Context<ClaimReward>,
-    ) -> Result<()> {
-        unimplemented!()
-    }
-
-    /// Deposit a reward for stakers.
-    /// The reward is distributed pro rata to staked beneficiaries.
-    pub fn give_reward(
-        _ctx: Context<DropReward>,
-    ) -> Result<()> {
-        unimplemented!()
-    }
-
     /// Change the config of the stake pool. 
     /// Changing the config means pushing the new config account in the ConfigHistory.
     /// 
     /// The configuration of the stake program can be changed on the fly,
     /// therefore, before changing the configuration, 
-    /// the owner needs to give the pool stakeholders the promised reward
+    /// the owner needs to give the pool member the promised reward
     /// for the time they staked their tokens using the current configuration.
     pub fn change_config(
         _ctx: Context<ChangeConfig>,
     ) -> Result<()> {
-        // TODO withdraw the reward tokens from the owner's account
-        // and change the config in one transaction.
+        // TODO withdraw the reward tokens from the owner's account,
+        // add the new config to the config history in a single transaction.
         unimplemented!()
     }
 }
