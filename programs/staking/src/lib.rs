@@ -3,6 +3,7 @@ mod reward; use reward::*;
 mod account; use account::*;
 mod context; use context::*;
 mod error; use error::SPError;
+use anchor_spl::token;
 use std::convert::TryFrom;
 
 declare_id!("5E1FrMGJa9S1qJHXVZKdhuu3WF8BrwzNdx1JKARyNbVm");
@@ -82,12 +83,12 @@ pub mod staking {
     /// User can freely deposit and withdraw tokens to/from the `vault_free`.
     /// The program cannot transfer any staked tokens without the user's signed request.
     /// 
-    /// Tokens inside `vault_free` don't bring any rewards.
+    /// Tokens inside `vault_free` don't gain any rewards.
     /// To start getting rewards user can stake one's tokens
     /// inside `vault_free` by calling the `stake` method.
     pub fn deposit(
         ctx: Context<Deposit>,
-        amount: u128, // The amount of tokens to deposit
+        amount: u64, // The amount of tokens to deposit
     ) -> Result<()> {
         let stakeholder = &mut ctx.accounts.stakeholder;
 
@@ -95,9 +96,18 @@ pub mod staking {
         stakeholder.vault_free = (*ctx.accounts.vault_free).key();
         stakeholder.vault_pending_unstaking = (*ctx.accounts.vault_pending_unstaking).key();
 
-        // TODO transfer tokens form beneficiary vault to vault_free
+        let token_program = ctx.accounts.token_program.to_account_info();
+        let from = ctx.accounts.beneficiary_token_account.to_account_info();
+        let to = (*ctx.accounts.vault_free).to_account_info();
+        let authority = ctx.accounts.beneficiary.to_account_info();
 
-        Ok(())
+        token::transfer(
+            CpiContext::new(
+                token_program,
+                token::Transfer { from, to, authority },
+            ), 
+            amount
+        )
     }
 
     /// Withdraw tokens from internal `free vault` controlled by the program

@@ -20,7 +20,7 @@ import {
     getOrCreateAssociatedTokenAccount,
     Account as TokenAccount,
     mintTo,
-    getAccount,
+    getAccount as getTokenAccount,
     createApproveInstruction,
     NATIVE_MINT,
 } from '@solana/spl-token';
@@ -208,9 +208,9 @@ describe("staking", () => {
             vaultPendingUnstaking, // Keypair
         );
 
-        const beneficiaryAccountState = await getAccount(connection, beneficiaryTokenAccount.address);
-        const stakeholderVaultFree = await getAccount(connection, vaultFree.publicKey);
-        const stakeholderVaultPU = await getAccount(connection, vaultPendingUnstaking.publicKey);
+        const beneficiaryAccountState = await getTokenAccount(connection, beneficiaryTokenAccount.address);
+        const stakeholderVaultFree = await getTokenAccount(connection, vaultFree.publicKey);
+        const stakeholderVaultPU = await getTokenAccount(connection, vaultPendingUnstaking.publicKey);
 
         expect(`${beneficiaryAccountState.amount}`).to.be.eq(`${stakeTokenAmount}`);
         expect(`${stakeholderVaultFree.amount}`).to.be.eq(`0`);
@@ -224,16 +224,29 @@ describe("staking", () => {
                 accounts: {
                     stakePool: stakePoolFixedPDA,
                     beneficiary: beneficiary.publicKey,
+                    beneficiaryTokenAccount: beneficiaryTokenAccount.address,
                     stakeholder: stakeholderPDA,
                     vaultFree: vaultFree.publicKey,
                     vaultPendingUnstaking: vaultPendingUnstaking.publicKey,
                     systemProgram: SystemProgram.programId,
+                    tokenProgram: TOKEN_PROGRAM_ID,
                 },
                 signers: [beneficiary],
             }
         );
 
-        // TODO check fields of the stakeholder struct
-        // TODO check internal vault_free and beneficiary external valut
+        const stakeholder = await program.account.stakeholder.fetch(stakeholderPDA);
+
+        expect(`${stakeholder.owner}`).to.be.eq(`${beneficiary.publicKey}`);
+        expect(`${stakeholder.vaultFree}`).to.be.eq(`${vaultFree.publicKey}`);
+        expect(`${stakeholder.vaultPendingUnstaking}`).to.be.eq(`${vaultPendingUnstaking.publicKey}`);
+
+        const beneficiaryAccountState = await getTokenAccount(connection, beneficiaryTokenAccount.address);
+        const stakeholderVaultFree = await getTokenAccount(connection, stakeholder.vaultFree);
+
+        console.log("beneficiaryAccountState: ", beneficiaryAccountState);
+        console.log("stakeholderVaultFree: ", stakeholderVaultFree);
+        expect(`${beneficiaryAccountState.amount}`).to.be.eq(`0`);
+        expect(`${stakeholderVaultFree.amount}`).to.be.eq(`${stakeTokenAmount}`);
     });
 });
