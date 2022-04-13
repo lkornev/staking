@@ -87,8 +87,8 @@ pub mod staking {
     /// inside `vault_free` by calling the `stake` method.
     pub fn deposit(
         ctx: Context<Deposit>,
-        amount: u64, // The amount of tokens to deposit
         member_bump: u8,
+        amount: u64, // The amount of tokens to deposit
     ) -> Result<()> {
         let member = &mut ctx.accounts.member;
 
@@ -101,6 +101,9 @@ pub mod staking {
         let from = ctx.accounts.beneficiary_token_account.to_account_info();
         let to = (*ctx.accounts.vault_free).to_account_info();
         let authority = ctx.accounts.beneficiary.to_account_info();
+
+        // TODO check the amount is less or equals to the beneficiary_token_account amount of tokens 
+        // and throw an erorr if needed
 
         token::transfer(
             CpiContext::new(
@@ -116,18 +119,50 @@ pub mod staking {
     /// Member can stake coins from one's `vault free` to any stake.
     /// Member must claim the rewards before staking more tokens to the same pool. (TODO Check)
     pub fn stake(
-        _ctx: Context<Stake>,
-        _amount: u128, // The amount of tokens to stake
-        reward_type: u8, // It uses in stake pool seeds
+        ctx: Context<Stake>,
+        reward_type: u8, // RewardType enum. It's used in stake pool seeds
+        stakeholder_bump: u8,
+        amount: u64, // The amount of the tokens to stake
     ) -> Result<()> {
         RewardType::try_from(reward_type)?;
+        let stakeholder = &mut ctx.accounts.stakeholder;
+        let token_program = ctx.accounts.token_program.to_account_info();
+        let from = (*ctx.accounts.vault_free).to_account_info();
+        let to = (*ctx.accounts.vault_staked).to_account_info();
+        let authority = ctx.accounts.member.to_account_info();
+
+        // TODO check the amount is less or equals to the vault_free amount of tokens 
+        // and throw an erorr if needed
+
+        stakeholder.owner = *ctx.accounts.beneficiary.owner;
+        stakeholder.vault = to.key();
+        stakeholder.staked_at = ctx.accounts.clock.unix_timestamp;
+        stakeholder.bump = stakeholder_bump;
+
+        let seeds = &[
+            ctx.accounts.member.to_account_info().key.as_ref(),
+            ctx.accounts.stake_pool.to_account_info().key.as_ref(),
+            &[stakeholder_bump]
+        ];
+
+        // TODO fix Cross-program invocation with unauthorized signer or writable account
+        token::transfer(
+            CpiContext::new_with_signer(
+                token_program,
+                token::Transfer { to, from, authority },
+                &[&seeds[..]],
+            ),
+            amount
+        )?;
+
         // TODO update total_staked_tokens in the stake pool config
-        unimplemented!()
+
+        Ok(())
     }
 
     /// Deposit a reward for stakers.
     /// The reward is distributed on demand pro rata staked tokens.
-    pub fn send_reward(
+    pub fn deposit_reward(
         _ctx: Context<DropReward>,
     ) -> Result<()> {
         // Transfer rewards to the stake pool factory.
@@ -150,6 +185,7 @@ pub mod staking {
     pub fn start_unstake(
         _ctx: Context<StartUnstake>,
     ) -> Result<()> {
+        // TODO remove stakeholder account and return lamports to the stake's owner
         unimplemented!()
     }
 

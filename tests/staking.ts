@@ -161,6 +161,7 @@ describe("staking", () => {
     let beneficiaryTokenAccount: TokenAccount;
     const stakeTokenAmount = 1000;
     const amountToDeposit = new BN(stakeTokenAmount);
+    const amountToStake = new BN(stakeTokenAmount);
 
     let vaultFree: Keypair;
     let vaultPendingUnstaking: Keypair;
@@ -224,10 +225,12 @@ describe("staking", () => {
         expect(`${memberVaultPU.amount}`).to.be.eq(`0`);
     });
 
+    let vaultStaked: Keypair;
+
     it("Deposits tokens", async () => {
        await program.rpc.deposit(
-            amountToDeposit,
             memberBump,
+            amountToDeposit,
             {
                 accounts: {
                     factory: factoryPDA,
@@ -255,5 +258,62 @@ describe("staking", () => {
 
         expect(`${beneficiaryAccountState.amount}`).to.be.eq(`0`);
         expect(`${memberVaultFree.amount}`).to.be.eq(`${stakeTokenAmount}`);
+    });
+
+    let stakeholderFixedPDA: PublicKey;
+    let stakeholderFixedBump: number;
+    
+    it("Stake tokens", async () => { 
+        const [_stakeholderFixedPDA, _stakeholderFixedBump] = await PublicKey.findProgramAddress(
+            [
+                memberPDA.toBuffer(),
+                stakePoolFixedPDA.toBuffer(),
+            ],
+            program.programId
+        );
+        stakeholderFixedPDA = _stakeholderFixedPDA;
+        stakeholderFixedBump = _stakeholderFixedBump;
+
+        vaultStaked = anchor.web3.Keypair.generate();
+        await createTokenAccount(
+            connection,
+            beneficiary, // Payer
+            stakeTokenMint,
+            stakeholderFixedPDA, // Owner
+            vaultStaked, // Keypair
+        );
+
+        const stakeholderVault = await getTokenAccount(connection, vaultStaked.publicKey);
+        expect(`${stakeholderVault.amount}`).to.be.eq(`0`);
+
+        await program.rpc.stake(
+            RewardType.Fixed,
+            stakeholderFixedBump,
+            amountToStake,
+            {
+                accounts: {
+                    factory: factoryPDA,
+                    stakePool: stakePoolFixedPDA,
+                    beneficiary: beneficiary.publicKey,
+                    member: memberPDA,
+                    vaultFree: vaultFree.publicKey,
+                    stakeholder: stakeholderFixedPDA,
+                    vaultStaked: vaultStaked.publicKey,
+                    clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+                    systemProgram: SystemProgram.programId,
+                    tokenProgram: TOKEN_PROGRAM_ID,
+                },
+                signers: [beneficiary],
+            }
+        );
+
+        // TODO check stakeholder fields
+
+        const member = await program.account.member.fetch(memberPDA);
+        const memberVaultFree = await getTokenAccount(connection, member.vaultFree);
+        expect(`${memberVaultFree.amount}`).to.be.eq(`${0}`);
+
+        const stakeholderVaultChanged = await getTokenAccount(connection, vaultStaked.publicKey);
+        expect(`${stakeholderVaultChanged.amount}`).to.be.eq(`amountToStake`);
     });
 });

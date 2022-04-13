@@ -158,8 +158,9 @@ pub struct Stakeholder {
     pub vault: Pubkey,
     // The UNIX timestamp when the staking begins
     pub staked_at: i64,
+    pub bump: u8,
 }
 
 impl Stakeholder {
-    pub const SPACE: usize = 32 * 2 + 8;
+    pub const SPACE: usize = 32 * 2 + 8 + 1;
 }

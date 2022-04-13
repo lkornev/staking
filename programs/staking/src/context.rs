@@ -96,6 +96,11 @@ pub struct Withdraw {}
 #[instruction(reward_type: u8)]
 pub struct Stake<'info> {
     #[account(
+        seeds = [Factory::PDA_SEED],
+        bump = factory.bump,
+    )]
+    pub factory: Account<'info, Factory>,
+    #[account(
         seeds = [&[reward_type]],
         bump = stake_pool.bump,
     )]
@@ -105,7 +110,7 @@ pub struct Stake<'info> {
     #[account(
         seeds = [
             beneficiary.to_account_info().key.as_ref(),
-            stake_pool.to_account_info().key.as_ref(),
+            factory.to_account_info().key.as_ref(),
         ],
         bump = member.bump,
     )]
@@ -133,8 +138,9 @@ pub struct Stake<'info> {
         constraint = vault_staked.owner == stakeholder.to_account_info().key(),
     )]
     pub vault_staked: Box<Account<'info, TokenAccount>>,
-    pub system_program: Program<'info, System>,
+    pub clock: Sysvar<'info, Clock>,
     pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
