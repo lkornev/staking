@@ -1,4 +1,8 @@
+use std::convert::TryFrom;
+
 use anchor_lang::prelude::*;
+
+use crate::reward::RewardType;
 
 /// The program main state.
 #[account]
@@ -35,10 +39,20 @@ pub struct StakePool {
 
 impl StakePool {
     pub const SPACE: usize = 32 + 8;
-    pub const PDA_KEY_FIXED: &'static str = "stake-pool-fixed";
-    pub const PDA_KEY_UNFIXED: &'static str = "stake-pool-unfixed";
+    pub const PDA_KEY_FIXED: &'static str = "fixed";
+    pub const PDA_KEY_UNFIXED: &'static str = "unfixed";
     pub const PDA_SEED_FIXED: & 'static [u8] = Self::PDA_KEY_FIXED.as_bytes();
     pub const PDA_SEED_UNFIXED: & 'static [u8] = Self::PDA_KEY_UNFIXED.as_bytes();
+
+    pub fn try_seed_from(orig: u8) -> Result<& 'static [u8]> {
+        RewardType::try_from(orig)
+            .map(|reward| {
+                match reward {
+                    RewardType::Fixed => Ok(Self::PDA_SEED_FIXED),
+                    RewardType::Unfixed => Ok(Self::PDA_SEED_UNFIXED)
+                }
+            })?
+    }
 }
 
 #[account]
@@ -153,12 +167,15 @@ impl Member {
     pub const SPACE: usize = 32 * 3 + 8;
 }
 
+/// It's leterally holds a stake
 #[account]
 pub struct Stakeholder {
-    /// The owner and beneficiary of the Member account.
+    /// The owner and beneficiary of the stake and the Member account.
     pub owner: Pubkey,
-    /// The tokens inside Stake vault gain rewards.
-    pub vault_staked: Pubkey,
+    /// The tokens inside Stakeholder vault gain rewards.
+    pub vault: Pubkey,
+    // The UNIX timestamp when the staking begins
+    pub staked_at: i64,
 }
 
 impl Stakeholder {

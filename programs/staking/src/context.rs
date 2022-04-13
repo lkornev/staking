@@ -50,19 +50,20 @@ pub struct NewStakePool<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(reward_type: u8)]
 pub struct Deposit<'info> {
     #[account(
-        seeds = [StakePool::PDA_SEED_FIXED],
-        bump = stake_pool.bump,
+        seeds = [Factory::PDA_SEED],
+        bump = factory.bump,
     )]
-    pub stake_pool: Account<'info, StakePool>,
+    pub factory: Account<'info, Factory>,
     #[account(
         init_if_needed,
         payer = beneficiary,
         space = 8 + Member::SPACE,
         seeds = [
             beneficiary.to_account_info().key.as_ref(),
-            stake_pool.to_account_info().key.as_ref(),
+            factory.to_account_info().key.as_ref(),
         ],
         bump,
     )]
@@ -92,9 +93,10 @@ pub struct Deposit<'info> {
 pub struct Withdraw {}
 
 #[derive(Accounts)]
+#[instruction(reward_type: u8)]
 pub struct Stake<'info> {
     #[account(
-        seeds = [StakePool::PDA_SEED_FIXED],
+        seeds = [StakePool::try_seed_from(reward_type).unwrap()],
         bump = stake_pool.bump,
     )]
     pub stake_pool: Account<'info, StakePool>,

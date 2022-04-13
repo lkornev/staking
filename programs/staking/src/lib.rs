@@ -22,7 +22,6 @@ pub mod staking {
         reward_token_mint: Pubkey,
         stake_token_mint: Pubkey,
     ) -> Result<()> {
-        msg!("HELLO!");
         let factory = &mut ctx.accounts.factory;
 
         factory.bump = *ctx.bumps.get(Factory::PDA_KEY).unwrap();
@@ -89,14 +88,14 @@ pub mod staking {
     pub fn deposit(
         ctx: Context<Deposit>,
         amount: u64, // The amount of tokens to deposit
-        bump: u8,
+        member_bump: u8,
     ) -> Result<()> {
         let member = &mut ctx.accounts.member;
 
         member.owner = *ctx.accounts.beneficiary.key;
         member.vault_free = (*ctx.accounts.vault_free).key();
         member.vault_pending_unstaking = (*ctx.accounts.vault_pending_unstaking).key();
-        member.bump = bump;
+        member.bump = member_bump;
 
         let token_program = ctx.accounts.token_program.to_account_info();
         let from = ctx.accounts.beneficiary_token_account.to_account_info();
@@ -112,15 +111,15 @@ pub mod staking {
         )
     }
 
-    /// Moves tokens from the `vault free` to the `stake valut`
-    /// Tokens inside `stake valut` allow to get rewards pro rata staked amount.
+    /// Moves tokens from the `vault free` to the `stakeholder valut`
+    /// Tokens inside `stakeholder valut` allow to get rewards pro rata staked amount.
     /// Member can stake coins from one's `vault free` to any stake.
     /// Member must claim the rewards before staking more tokens to the same pool. (TODO Check)
     pub fn stake(
         _ctx: Context<Stake>,
         _amount: u128, // The amount of tokens to stake
+        reward_type: u8, // It uses in stake pool seeds
     ) -> Result<()> {
-        // TODO set timestamp when the staking begins
         // TODO update total_staked_tokens in the stake pool config
         unimplemented!()
     }
@@ -139,6 +138,7 @@ pub mod staking {
         _ctx: Context<ClaimReward>,
     ) -> Result<()> {
         // Iterate received stake pool config history and get rewards
+        // Transfer the factory owner one's owner_interest in the reward tokens.
         unimplemented!()
     }
 

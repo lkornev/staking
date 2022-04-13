@@ -92,7 +92,7 @@ describe("staking", () => {
 
     it("Creates new staking pool instance with fixed rewards", async () => {
         const [_stakePoolFixedPDA, spfBump] = await PublicKey.findProgramAddress(
-            [anchor.utils.bytes.utf8.encode("stake-pool-fixed")],
+            [anchor.utils.bytes.utf8.encode("fixed")],
             program.programId
         );
         stakePoolFixedPDA = _stakePoolFixedPDA;
@@ -184,14 +184,15 @@ describe("staking", () => {
         vaultFree = anchor.web3.Keypair.generate();
         vaultPendingUnstaking = anchor.web3.Keypair.generate();
 
-        const [_memberPDA, memberBump] = await PublicKey.findProgramAddress(
+        const [_memberPDA, _memberBump] = await PublicKey.findProgramAddress(
             [
                 beneficiary.publicKey.toBuffer(),
-                stakePoolFixedPDA.toBuffer(),
+                factoryPDA.toBuffer(),
             ],
             program.programId
         );
         memberPDA = _memberPDA;
+        memberBump = _memberBump;
 
         await createTokenAccount(
             connection,
@@ -219,12 +220,12 @@ describe("staking", () => {
     });
 
     it("Deposits tokens", async () => {
-        await program.rpc.deposit(
+       await program.rpc.deposit(
             amountToDeposit,
             memberBump,
             {
                 accounts: {
-                    stakePool: stakePoolFixedPDA,
+                    factory: factoryPDA,
                     beneficiary: beneficiary.publicKey,
                     beneficiaryTokenAccount: beneficiaryTokenAccount.address,
                     member: memberPDA,
@@ -242,12 +243,11 @@ describe("staking", () => {
         expect(`${member.owner}`).to.be.eq(`${beneficiary.publicKey}`);
         expect(`${member.vaultFree}`).to.be.eq(`${vaultFree.publicKey}`);
         expect(`${member.vaultPendingUnstaking}`).to.be.eq(`${vaultPendingUnstaking.publicKey}`);
+        expect(member.bump).to.be.eq(memberBump);
 
         const beneficiaryAccountState = await getTokenAccount(connection, beneficiaryTokenAccount.address);
         const memberVaultFree = await getTokenAccount(connection, member.vaultFree);
 
-        console.log("beneficiaryAccountState: ", beneficiaryAccountState);
-        console.log("member: ", memberVaultFree);
         expect(`${beneficiaryAccountState.amount}`).to.be.eq(`0`);
         expect(`${memberVaultFree.amount}`).to.be.eq(`${stakeTokenAmount}`);
     });
