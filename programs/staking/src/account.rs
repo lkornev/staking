@@ -150,5 +150,17 @@ pub struct Member {
 }
 
 impl Member {
-    pub const SPACE: usize = 32 * 3 + 16;
+    pub const SPACE: usize = 32 * 3 + 8;
+}
+
+#[account]
+pub struct Stakeholder {
+    /// The owner and beneficiary of the Member account.
+    pub owner: Pubkey,
+    /// The tokens inside Stake vault gain rewards.
+    pub vault_staked: Pubkey,
+}
+
+impl Stakeholder {
+    pub const SPACE: usize = 32 * 2;
 }

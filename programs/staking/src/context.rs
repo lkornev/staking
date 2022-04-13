@@ -98,6 +98,8 @@ pub struct Stake<'info> {
         bump = stake_pool.bump,
     )]
     pub stake_pool: Account<'info, StakePool>,
+    #[account(mut)]
+    pub beneficiary: Signer<'info>,
     #[account(
         seeds = [
             beneficiary.to_account_info().key.as_ref(),
@@ -113,17 +115,22 @@ pub struct Stake<'info> {
     )]
     pub vault_free: Box<Account<'info, TokenAccount>>,
     #[account(
-        mut,
-        // TODO add errors with useful text
-        constraint = vault_pending_unstaking.owner == member.to_account_info().key(), 
-        constraint = vault_pending_unstaking.mint == vault_free.mint,
+        init,
+        payer = beneficiary,
+        space = 8 + Stakeholder::SPACE,
+        seeds = [
+            member.to_account_info().key.as_ref(),
+            stake_pool.to_account_info().key.as_ref(),
+        ],
+        bump,
     )]
-    pub vault_pending_unstaking: Box<Account<'info, TokenAccount>>,
-    #[account(mut)]
-    pub beneficiary: Signer<'info>,
-    /// CHECK: used only for transfer tokens from by the signed beneficiary instraction.
-    #[account(mut)]
-    pub beneficiary_token_account: AccountInfo<'info>,
+    pub stakeholder: Account<'info, Stakeholder>,
+    #[account(
+        mut,
+        // TODO add an error with useful text
+        constraint = vault_staked.owner == stakeholder.to_account_info().key(),
+    )]
+    pub vault_staked: Box<Account<'info, TokenAccount>>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
 }
