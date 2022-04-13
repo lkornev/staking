@@ -26,7 +26,7 @@ pub struct NewStakePool<'info> {
         init, 
         payer = owner,
         space = 8 + StakePool::SPACE,
-        seeds = [StakePool::PDA_SEED_FIXED],
+        seeds = [&[reward_type]],
         bump,
     )]
     pub stake_pool: Account<'info, StakePool>,
@@ -35,7 +35,7 @@ pub struct NewStakePool<'info> {
         payer = owner,
         space = 8 + StakePoolConfig::SPACE,
         seeds = [
-            b"0", // Index in the Config Histroy
+            &[0], // Index in the Config Histroy
             stake_pool.to_account_info().key.as_ref(),
         ],
         bump,
@@ -96,7 +96,7 @@ pub struct Withdraw {}
 #[instruction(reward_type: u8)]
 pub struct Stake<'info> {
     #[account(
-        seeds = [StakePool::try_seed_from(reward_type).unwrap()],
+        seeds = [&[reward_type]],
         bump = stake_pool.bump,
     )]
     pub stake_pool: Account<'info, StakePool>,

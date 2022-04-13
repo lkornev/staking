@@ -92,14 +92,14 @@ describe("staking", () => {
 
     it("Creates new staking pool instance with fixed rewards", async () => {
         const [_stakePoolFixedPDA, spfBump] = await PublicKey.findProgramAddress(
-            [anchor.utils.bytes.utf8.encode("fixed")],
+            [ Uint8Array.from([RewardType.Fixed]) ],
             program.programId
         );
         stakePoolFixedPDA = _stakePoolFixedPDA;
 
         const [_stakePoolConfigPDA, _spcBump] = await PublicKey.findProgramAddress(
             [
-                anchor.utils.bytes.utf8.encode("0"), // Index in the Config Histroy
+                Uint8Array.from([0]), // Index in the Config Histroy
                 stakePoolFixedPDA.toBuffer()
             ],
             program.programId
@@ -109,7 +109,12 @@ describe("staking", () => {
         const configTemplate: StakePoolConfig = newSPFixedConfig(configHistoryLength);
 
         await program.rpc.new(
-            ...Object.values(configTemplate),
+            RewardType.Fixed,
+            new BN(40), // secs, unstakeDelay
+            50, // %, unstakeForseFeePercent
+            new BN(30), // secs, rewardPeriod
+            new BN(10), // %, rewardMetadata
+            configHistoryLength,
             spfBump,
             {
                 accounts: {

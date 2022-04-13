@@ -37,10 +37,10 @@ pub mod staking {
     /// Creates a new stake pool instance
     pub fn new(
         ctx: Context<NewStakePool>,
+        reward_type: u8, // RewardType enum
         unstake_delay: u64,
         unstake_forse_fee_percent: u8,
         reward_period: u64,
-        reward_type: u8, // RewardType enum
         reward_metadata: u128, // Could be any data depending on the `reward_type`
         config_history_length: u32,
         bump: u8,
@@ -120,6 +120,7 @@ pub mod staking {
         _amount: u128, // The amount of tokens to stake
         reward_type: u8, // It uses in stake pool seeds
     ) -> Result<()> {
+        RewardType::try_from(reward_type)?;
         // TODO update total_staked_tokens in the stake pool config
         unimplemented!()
     }

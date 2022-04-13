@@ -1,8 +1,4 @@
-use std::convert::TryFrom;
-
 use anchor_lang::prelude::*;
-
-use crate::reward::RewardType;
 
 /// The program main state.
 #[account]
@@ -39,20 +35,6 @@ pub struct StakePool {
 
 impl StakePool {
     pub const SPACE: usize = 32 + 8;
-    pub const PDA_KEY_FIXED: &'static str = "fixed";
-    pub const PDA_KEY_UNFIXED: &'static str = "unfixed";
-    pub const PDA_SEED_FIXED: & 'static [u8] = Self::PDA_KEY_FIXED.as_bytes();
-    pub const PDA_SEED_UNFIXED: & 'static [u8] = Self::PDA_KEY_UNFIXED.as_bytes();
-
-    pub fn try_seed_from(orig: u8) -> Result<& 'static [u8]> {
-        RewardType::try_from(orig)
-            .map(|reward| {
-                match reward {
-                    RewardType::Fixed => Ok(Self::PDA_SEED_FIXED),
-                    RewardType::Unfixed => Ok(Self::PDA_SEED_UNFIXED)
-                }
-            })?
-    }
 }
 
 #[account]
