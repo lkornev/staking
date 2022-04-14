@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use crate::account::*;
-use anchor_spl::token::{TokenAccount, Token};
+use anchor_spl::token::{TokenAccount, Token, Mint};
+use anchor_spl::associated_token::AssociatedToken;
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -12,16 +13,19 @@ pub struct Initialize<'info> {
         bump,
     )]
     pub factory: Account<'info, Factory>,
+    pub reward_token_mint: Box<Account<'info, Mint>>,
+    pub stake_token_mint: Box<Account<'info, Mint>>,
     #[account(
-        mut,
-        // TODO add errors with useful text
-        constraint = vault_reward.owner == factory.key(),
-        // TODO for some reason it doesn't work. Fix
-        constraint = vault_reward.mint == factory.reward_token_mint,
+        init,
+        payer = initializer,
+        associated_token::mint = reward_token_mint,
+        associated_token::authority = factory,
     )]
     pub vault_reward: Box<Account<'info, TokenAccount>>,
     #[account(mut)]
     pub initializer: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
 }

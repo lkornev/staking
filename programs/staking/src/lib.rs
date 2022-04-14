@@ -19,8 +19,6 @@ pub mod staking {
         owner: Pubkey,
         owner_interest: u8,
         config_change_delay: u128,
-        reward_token_mint: Pubkey,
-        stake_token_mint: Pubkey,
     ) -> Result<()> {
         let factory = &mut ctx.accounts.factory;
 
@@ -28,8 +26,8 @@ pub mod staking {
         factory.owner = owner;
         factory.owner_interest = owner_interest;
         factory.config_change_delay = config_change_delay;
-        factory.reward_token_mint = reward_token_mint;
-        factory.stake_token_mint = stake_token_mint;
+        factory.reward_token_mint = ctx.accounts.reward_token_mint.key();
+        factory.stake_token_mint = ctx.accounts.stake_token_mint.key();
         factory.vault_reward = ctx.accounts.vault_reward.key();
 
         Ok(())
