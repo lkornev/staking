@@ -52,6 +52,8 @@ describe("staking", () => {
     let stakePoolFixedPDA: PublicKey;
     let stakePoolConfigPDA: PublicKey;
 
+    let vaultReward: Keypair;
+
     it("Creates reward and stake mints", async () => {
         owner = await createUserWithLamports(connection, 10);
         rewardTokenMint = await createTokenMint(connection, owner.publicKey, owner, 6);
@@ -65,6 +67,15 @@ describe("staking", () => {
         );
         factoryPDA = _factoryPDA;
 
+        vaultReward = anchor.web3.Keypair.generate();
+        await createTokenAccount(
+            connection,
+            owner, // Payer
+            rewardTokenMint,
+            factoryPDA, // Owner
+            vaultReward, // Keypair
+        );
+
         await program.rpc.initialize(
             owner.publicKey,
             ownerInterest,
@@ -75,6 +86,7 @@ describe("staking", () => {
                 accounts: {
                     factory: factoryPDA,
                     initializer: owner.publicKey,
+                    vaultReward: vaultReward.publicKey,
                     systemProgram: SystemProgram.programId,
                 },
                 signers: [owner],

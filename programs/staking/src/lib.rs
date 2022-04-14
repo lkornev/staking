@@ -30,6 +30,7 @@ pub mod staking {
         factory.config_change_delay = config_change_delay;
         factory.reward_token_mint = reward_token_mint;
         factory.stake_token_mint = stake_token_mint;
+        factory.vault_reward = ctx.accounts.vault_reward.key();
 
         Ok(())
     }

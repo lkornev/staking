@@ -12,9 +12,18 @@ pub struct Initialize<'info> {
         bump,
     )]
     pub factory: Account<'info, Factory>,
+    #[account(
+        mut,
+        // TODO add errors with useful text
+        constraint = vault_reward.owner == factory.key(),
+        // TODO for some reason it doesn't work. Fix
+        constraint = vault_reward.mint == factory.reward_token_mint,
+    )]
+    pub vault_reward: Box<Account<'info, TokenAccount>>,
     #[account(mut)]
     pub initializer: Signer<'info>,
     pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
 }
 
 #[derive(Accounts)]
@@ -72,6 +81,7 @@ pub struct Deposit<'info> {
         mut, 
         // TODO add an error with useful text
         constraint = vault_free.owner == member.to_account_info().key(),
+        constraint = vault_free.mint == factory.stake_token_mint,
     )]
     pub vault_free: Box<Account<'info, TokenAccount>>,
     #[account(

@@ -18,10 +18,12 @@ pub struct Factory {
     /// The mint itself does not need to be under control of the stake pool owner or a Member.
     /// It could be the wrapped Sol mint or any other spl token mint.
     pub stake_token_mint: Pubkey,
+    /// The vault with the reward tokens to be transfered to the members on demand.
+    pub vault_reward: Pubkey,
 }
 
 impl Factory {
-    pub const SPACE: usize = 1 + 32 + 1 + 16 + 32 + 32;
+    pub const SPACE: usize = 1 + 32 + 1 + 16 + 32 + 32 + 32;
     pub const PDA_KEY: &'static str = "factory";
     pub const PDA_SEED: & 'static [u8] = Self::PDA_KEY.as_bytes();
 }
