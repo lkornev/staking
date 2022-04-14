@@ -100,230 +100,277 @@ describe("staking", () => {
         expect(`${factory.vaultReward}`).to.be.eq(`${vaultReward}`);
     });
 
-    // it("Creates new staking pool instance with fixed rewards", async () => {
-    //     const [_stakePoolFixedPDA, spfBump] = await PublicKey.findProgramAddress(
-    //         [ Uint8Array.from([RewardType.Fixed]) ],
-    //         program.programId
-    //     );
-    //     stakePoolFixedPDA = _stakePoolFixedPDA;
+    it("Creates new staking pool instance with fixed rewards", async () => {
+        const [_stakePoolFixedPDA, spfBump] = await PublicKey.findProgramAddress(
+            [ Uint8Array.from([RewardType.Fixed]) ],
+            program.programId
+        );
+        stakePoolFixedPDA = _stakePoolFixedPDA;
 
-    //     const [_stakePoolConfigPDA, _spcBump] = await PublicKey.findProgramAddress(
-    //         [
-    //             Uint8Array.from([0]), // Index in the Config Histroy
-    //             stakePoolFixedPDA.toBuffer()
-    //         ],
-    //         program.programId
-    //     );
-    //     stakePoolConfigPDA = _stakePoolConfigPDA;
+        const [_stakePoolConfigPDA, _spcBump] = await PublicKey.findProgramAddress(
+            [
+                Uint8Array.from([0]), // Index in the Config Histroy
+                stakePoolFixedPDA.toBuffer()
+            ],
+            program.programId
+        );
+        stakePoolConfigPDA = _stakePoolConfigPDA;
 
-    //     const configTemplate: StakePoolConfig = newSPFixedConfig(configHistoryLength);
+        const unstakeDelay = new BN(40);
+        const unstakeForseFeePercent = 50;
+        const rewardPeriod = new BN(30);
+        const rewardMetadata = new BN(10);
 
-    //     await program.rpc.new(
-    //         RewardType.Fixed,
-    //         new BN(40), // secs, unstakeDelay
-    //         50, // %, unstakeForseFeePercent
-    //         new BN(30), // secs, rewardPeriod
-    //         new BN(10), // %, rewardMetadata
-    //         configHistoryLength,
-    //         spfBump,
-    //         {
-    //             accounts: {
-    //                 factory: factoryPDA,
-    //                 stakePool: stakePoolFixedPDA,
-    //                 stakePoolConfig: stakePoolConfigPDA,
-    //                 configHistory: configHistoryKeypair.publicKey,
-    //                 owner: owner.publicKey,
-    //                 clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-    //                 systemProgram: SystemProgram.programId,
-    //             },
-    //             signers: [owner, configHistoryKeypair],
-    //             preInstructions: [
-    //                 await program.account.configHistory.createInstruction(
-    //                     configHistoryKeypair, 
-    //                     configHistoryLength * configHistoryElSize + configHistoryMetadata
-    //                 ),
-    //             ]
-    //         }
-    //     );
+        await program.rpc.new(
+            RewardType.Fixed,
+            new BN(40), // secs
+            50, // %,
+            new BN(30), // secs
+            new BN(10), // %,
+            configHistoryLength,
+            spfBump,
+            {
+                accounts: {
+                    factory: factoryPDA,
+                    stakePool: stakePoolFixedPDA,
+                    stakePoolConfig: stakePoolConfigPDA,
+                    configHistory: configHistoryKeypair.publicKey,
+                    owner: owner.publicKey,
+                    clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+                    systemProgram: SystemProgram.programId,
+                },
+                signers: [owner, configHistoryKeypair],
+                preInstructions: [
+                    await program.account.configHistory.createInstruction(
+                        configHistoryKeypair, 
+                        configHistoryLength * configHistoryElSize + configHistoryMetadata
+                    ),
+                ]
+            }
+        );
 
-    //     const stakePool = await program.account.stakePool.fetch(stakePoolFixedPDA);
-    //     const configHistory = await program.account.configHistory.fetch(configHistoryKeypair.publicKey);
-    //     const stakePoolConfig = await program.account.stakePoolConfig.fetch(stakePoolConfigPDA);
+        const stakePool = await program.account.stakePool.fetch(stakePoolFixedPDA);
+        const configHistory = await program.account.configHistory.fetch(configHistoryKeypair.publicKey);
+        const stakePoolConfig = await program.account.stakePoolConfig.fetch(stakePoolConfigPDA);
 
-    //     expect(`${stakePool.configHistory}`).to.be.eq(`${configHistoryKeypair.publicKey}`);
-    //     expect(`${configHistory.history[0]}`).to.be.eq(`${stakePoolConfigPDA}`);
+        expect(`${stakePool.configHistory}`).to.be.eq(`${configHistoryKeypair.publicKey}`);
+        expect(`${configHistory.history[0]}`).to.be.eq(`${stakePoolConfigPDA}`);
 
-    //     for (let i = 1; i < configHistoryLength; i++) {
-    //         expect(configHistory.history[i], `el № ${i}`).to.be.eq(null);
-    //     }
+        for (let i = 1; i < configHistoryLength; i++) {
+            expect(configHistory.history[i], `el № ${i}`).to.be.eq(null);
+        }
 
-    //     expect(`${stakePoolConfig.totalStakedTokens}`).to.be.eq(`${0}`);
-    //     expect(`${stakePoolConfig.unstakeDelay}`).to.be.eq(`${configTemplate.unstakeDelay}`);
-    //     expect(`${stakePoolConfig.unstakeForseFeePercent}`).to.be
-    //         .eq(`${configTemplate.unstakeForseFeePercent}`);
-    //     expect(`${stakePoolConfig.rewardPeriod}`).to.be.eq(`${configTemplate.rewardPeriod}`);
-    //     expect(stakePoolConfig.rewardType).to.be.eq(configTemplate.rewardType);
-    //     expect(`${stakePoolConfig.rewardMetadata}`).to.be
-    //         .eq(`${configTemplate.rewardMetadata}`);
-    // });
+        expect(`${stakePoolConfig.totalStakedTokens}`).to.be.eq(`${0}`);
+        expect(`${stakePoolConfig.unstakeDelay}`).to.be.eq(`${unstakeDelay}`);
+        expect(`${stakePoolConfig.unstakeForseFeePercent}`).to.be.eq(`${unstakeForseFeePercent}`);
+        expect(`${stakePoolConfig.rewardPeriod}`).to.be.eq(`${rewardPeriod}`);
+        expect(stakePoolConfig.rewardType).to.be.eq(RewardType.Fixed);
+        expect(`${stakePoolConfig.rewardMetadata}`).to.be.eq(`${rewardMetadata}`);
+    });
 
-    // let beneficiary: Signer;
-    // let beneficiaryTokenAccount: TokenAccount;
-    // const stakeTokenAmount = 1000;
-    // const amountToDeposit = new BN(stakeTokenAmount);
-    // const amountToStake = new BN(stakeTokenAmount);
+    let beneficiary: Signer;
+    let beneficiaryTokenAccount: TokenAccount;
+    const stakeTokenAmount = 1000;
+    const amountToDeposit = new BN(stakeTokenAmount);
+    const amountToStake = new BN(stakeTokenAmount);
 
-    // let vaultFree: Keypair;
-    // let vaultPendingUnstaking: Keypair;
-    // let memberPDA: PublicKey;
-    // let memberBump: number;
+    let vaultFree: Keypair;
+    let vaultPendingUnstaking: Keypair;
+    let memberPDA: PublicKey;
+    let memberBump: number;
 
-    // it("Create member PDA and token vaults", async () => {
-    //     beneficiary = await createUserWithLamports(connection, 1);
+    it("Create member PDA and token vaults", async () => {
+        beneficiary = await createUserWithLamports(connection, 1);
 
-    //     beneficiaryTokenAccount = await getOrCreateAssociatedTokenAccount(
-    //         connection,
-    //         beneficiary, // Payer
-    //         stakeTokenMint,
-    //         beneficiary.publicKey, // Owner
-    //     );
+        beneficiaryTokenAccount = await getOrCreateAssociatedTokenAccount(
+            connection,
+            beneficiary, // Payer
+            stakeTokenMint,
+            beneficiary.publicKey, // Owner
+        );
 
-    //     await mintTo(
-    //         connection,
-    //         owner,  // Payer
-    //         stakeTokenMint,
-    //         beneficiaryTokenAccount.address, // mint to
-    //         owner, // Authority
-    //         stakeTokenAmount,
-    //     );
+        await mintTo(
+            connection,
+            owner,  // Payer
+            stakeTokenMint,
+            beneficiaryTokenAccount.address, // mint to
+            owner, // Authority
+            stakeTokenAmount,
+        );
 
-    //     vaultFree = anchor.web3.Keypair.generate();
-    //     vaultPendingUnstaking = anchor.web3.Keypair.generate();
+        vaultFree = anchor.web3.Keypair.generate();
+        vaultPendingUnstaking = anchor.web3.Keypair.generate();
 
-    //     const [_memberPDA, _memberBump] = await PublicKey.findProgramAddress(
-    //         [
-    //             beneficiary.publicKey.toBuffer(),
-    //             factoryPDA.toBuffer(),
-    //         ],
-    //         program.programId
-    //     );
-    //     memberPDA = _memberPDA;
-    //     memberBump = _memberBump;
+        const [_memberPDA, _memberBump] = await PublicKey.findProgramAddress(
+            [
+                beneficiary.publicKey.toBuffer(),
+                factoryPDA.toBuffer(),
+            ],
+            program.programId
+        );
+        memberPDA = _memberPDA;
+        memberBump = _memberBump;
 
-    //     await createTokenAccount(
-    //         connection,
-    //         beneficiary, // Payer
-    //         stakeTokenMint,
-    //         memberPDA, // Owner
-    //         vaultFree, // Keypair
-    //     );
+        await createTokenAccount(
+            connection,
+            beneficiary, // Payer
+            stakeTokenMint,
+            memberPDA, // Owner
+            vaultFree, // Keypair
+        );
 
-    //     await createTokenAccount(
-    //         connection,
-    //         beneficiary, // Payer
-    //         stakeTokenMint,
-    //         memberPDA, // Owner
-    //         vaultPendingUnstaking, // Keypair
-    //     );
+        await createTokenAccount(
+            connection,
+            beneficiary, // Payer
+            stakeTokenMint,
+            memberPDA, // Owner
+            vaultPendingUnstaking, // Keypair
+        );
 
-    //     const beneficiaryAccountState = await getTokenAccount(connection, beneficiaryTokenAccount.address);
-    //     const memberVaultFree = await getTokenAccount(connection, vaultFree.publicKey);
-    //     const memberVaultPU = await getTokenAccount(connection, vaultPendingUnstaking.publicKey);
+        const beneficiaryAccountState = await getTokenAccount(connection, beneficiaryTokenAccount.address);
+        const memberVaultFree = await getTokenAccount(connection, vaultFree.publicKey);
+        const memberVaultPU = await getTokenAccount(connection, vaultPendingUnstaking.publicKey);
 
-    //     expect(`${beneficiaryAccountState.amount}`).to.be.eq(`${stakeTokenAmount}`);
-    //     expect(`${memberVaultFree.amount}`).to.be.eq(`0`);
-    //     expect(`${memberVaultPU.amount}`).to.be.eq(`0`);
-    // });
+        expect(`${beneficiaryAccountState.amount}`).to.be.eq(`${stakeTokenAmount}`);
+        expect(`${memberVaultFree.amount}`).to.be.eq(`0`);
+        expect(`${memberVaultPU.amount}`).to.be.eq(`0`);
+    });
 
-    // let vaultStaked: Keypair;
+    let vaultStaked: Keypair;
 
-    // it("Deposits tokens", async () => {
-    //    await program.rpc.deposit(
-    //         memberBump,
-    //         amountToDeposit,
-    //         {
-    //             accounts: {
-    //                 factory: factoryPDA,
-    //                 beneficiary: beneficiary.publicKey,
-    //                 beneficiaryTokenAccount: beneficiaryTokenAccount.address,
-    //                 member: memberPDA,
-    //                 vaultFree: vaultFree.publicKey,
-    //                 vaultPendingUnstaking: vaultPendingUnstaking.publicKey,
-    //                 systemProgram: SystemProgram.programId,
-    //                 tokenProgram: TOKEN_PROGRAM_ID,
-    //             },
-    //             signers: [beneficiary],
-    //         }
-    //     );
+    it("Deposits tokens", async () => {
+       await program.rpc.deposit(
+            memberBump,
+            amountToDeposit,
+            {
+                accounts: {
+                    factory: factoryPDA,
+                    beneficiary: beneficiary.publicKey,
+                    beneficiaryTokenAccount: beneficiaryTokenAccount.address,
+                    member: memberPDA,
+                    vaultFree: vaultFree.publicKey,
+                    vaultPendingUnstaking: vaultPendingUnstaking.publicKey,
+                    systemProgram: SystemProgram.programId,
+                    tokenProgram: TOKEN_PROGRAM_ID,
+                },
+                signers: [beneficiary],
+            }
+        );
 
-    //     const member = await program.account.member.fetch(memberPDA);
+        const member = await program.account.member.fetch(memberPDA);
 
-    //     expect(`${member.owner}`).to.be.eq(`${beneficiary.publicKey}`);
-    //     expect(`${member.vaultFree}`).to.be.eq(`${vaultFree.publicKey}`);
-    //     expect(`${member.vaultPendingUnstaking}`).to.be.eq(`${vaultPendingUnstaking.publicKey}`);
-    //     expect(member.bump).to.be.eq(memberBump);
+        expect(`${member.owner}`).to.be.eq(`${beneficiary.publicKey}`);
+        expect(`${member.vaultFree}`).to.be.eq(`${vaultFree.publicKey}`);
+        expect(`${member.vaultPendingUnstaking}`).to.be.eq(`${vaultPendingUnstaking.publicKey}`);
+        expect(member.bump).to.be.eq(memberBump);
 
-    //     const beneficiaryAccountState = await getTokenAccount(connection, beneficiaryTokenAccount.address);
-    //     const memberVaultFree = await getTokenAccount(connection, member.vaultFree);
+        const beneficiaryAccountState = await getTokenAccount(connection, beneficiaryTokenAccount.address);
+        const memberVaultFree = await getTokenAccount(connection, member.vaultFree);
 
-    //     expect(`${beneficiaryAccountState.amount}`).to.be.eq(`0`);
-    //     expect(`${memberVaultFree.amount}`).to.be.eq(`${stakeTokenAmount}`);
-    // });
+        expect(`${beneficiaryAccountState.amount}`).to.be.eq(`0`);
+        expect(`${memberVaultFree.amount}`).to.be.eq(`${stakeTokenAmount}`);
+    });
 
-    // let stakeholderFixedPDA: PublicKey;
-    // let stakeholderFixedBump: number;
+    let stakeholderFixedPDA: PublicKey;
+    let stakeholderFixedBump: number;
     
-    // it("Stake tokens", async () => { 
-    //     const [_stakeholderFixedPDA, _stakeholderFixedBump] = await PublicKey.findProgramAddress(
-    //         [
-    //             memberPDA.toBuffer(),
-    //             stakePoolFixedPDA.toBuffer(),
-    //         ],
-    //         program.programId
-    //     );
-    //     stakeholderFixedPDA = _stakeholderFixedPDA;
-    //     stakeholderFixedBump = _stakeholderFixedBump;
+    it("Stake tokens", async () => { 
+        const [_stakeholderFixedPDA, _stakeholderFixedBump] = await PublicKey.findProgramAddress(
+            [
+                memberPDA.toBuffer(),
+                stakePoolFixedPDA.toBuffer(),
+            ],
+            program.programId
+        );
+        stakeholderFixedPDA = _stakeholderFixedPDA;
+        stakeholderFixedBump = _stakeholderFixedBump;
 
-    //     vaultStaked = anchor.web3.Keypair.generate();
-    //     await createTokenAccount(
-    //         connection,
-    //         beneficiary, // Payer
-    //         stakeTokenMint,
-    //         stakeholderFixedPDA, // Owner
-    //         vaultStaked, // Keypair
-    //     );
+        vaultStaked = anchor.web3.Keypair.generate();
+        await createTokenAccount(
+            connection,
+            beneficiary, // Payer
+            stakeTokenMint,
+            stakeholderFixedPDA, // Owner
+            vaultStaked, // Keypair
+        );
 
-    //     const stakeholderVault = await getTokenAccount(connection, vaultStaked.publicKey);
-    //     expect(`${stakeholderVault.amount}`).to.be.eq(`0`);
+        const stakeholderVault = await getTokenAccount(connection, vaultStaked.publicKey);
+        expect(`${stakeholderVault.amount}`).to.be.eq(`0`);
 
-    //     await program.rpc.stake(
-    //         RewardType.Fixed,
-    //         stakeholderFixedBump,
-    //         amountToStake,
-    //         {
-    //             accounts: {
-    //                 factory: factoryPDA,
-    //                 stakePool: stakePoolFixedPDA,
-    //                 beneficiary: beneficiary.publicKey,
-    //                 member: memberPDA,
-    //                 vaultFree: vaultFree.publicKey,
-    //                 stakeholder: stakeholderFixedPDA,
-    //                 vaultStaked: vaultStaked.publicKey,
-    //                 clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-    //                 systemProgram: SystemProgram.programId,
-    //                 tokenProgram: TOKEN_PROGRAM_ID,
-    //             },
-    //             signers: [beneficiary],
-    //         }
-    //     );
+        await program.rpc.stake(
+            RewardType.Fixed,
+            stakeholderFixedBump,
+            amountToStake,
+            {
+                accounts: {
+                    factory: factoryPDA,
+                    stakePool: stakePoolFixedPDA,
+                    beneficiary: beneficiary.publicKey,
+                    member: memberPDA,
+                    vaultFree: vaultFree.publicKey,
+                    stakeholder: stakeholderFixedPDA,
+                    vaultStaked: vaultStaked.publicKey,
+                    clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+                    systemProgram: SystemProgram.programId,
+                    tokenProgram: TOKEN_PROGRAM_ID,
+                },
+                signers: [beneficiary],
+            }
+        );
 
-    //     // TODO check stakeholder fields
+        // TODO check stakeholder fields
 
-    //     const member = await program.account.member.fetch(memberPDA);
-    //     const memberVaultFree = await getTokenAccount(connection, member.vaultFree);
-    //     expect(`${memberVaultFree.amount}`).to.be.eq(`${0}`);
+        const member = await program.account.member.fetch(memberPDA);
+        const memberVaultFree = await getTokenAccount(connection, member.vaultFree);
+        expect(`${memberVaultFree.amount}`).to.be.eq(`${0}`);
 
-    //     const stakeholderVaultChanged = await getTokenAccount(connection, vaultStaked.publicKey);
-    //     expect(`${stakeholderVaultChanged.amount}`).to.be.eq(`${amountToStake}`);
-    // });
+        const stakeholderVaultChanged = await getTokenAccount(connection, vaultStaked.publicKey);
+        expect(`${stakeholderVaultChanged.amount}`).to.be.eq(`${amountToStake}`);
+    });
+
+    const rewardTokensAmount = 100000000;
+    let ownerTokenAccount: TokenAccount;
+
+    it("Create owner account with reward tokens", async () => {
+        ownerTokenAccount = await getOrCreateAssociatedTokenAccount(
+            connection,
+            owner, // Payer
+            rewardTokenMint,
+            owner.publicKey, // Owner
+        );
+
+        await mintTo(
+            connection,
+            owner,  // Payer
+            rewardTokenMint,
+            ownerTokenAccount.address, // mint to
+            owner, // Authority
+            rewardTokensAmount,
+        );
+    });
+
+    it("Deposits tokens", async () => {
+        const factory = await program.account.factory.fetch(factoryPDA);
+        const factoryRewardVault = await getTokenAccount(connection, factory.vaultReward);
+
+        expect(`${factoryRewardVault.amount}`).to.be.eq(`0`);
+
+        await program.rpc.depositReward(
+            new BN(rewardTokensAmount),
+            {
+                accounts: {
+                    factory: factoryPDA,
+                    owner: owner.publicKey,
+                    vaultOwner: ownerTokenAccount.address,
+                    vaultReward: factory.vaultReward,
+                    systemProgram: SystemProgram.programId,
+                    tokenProgram: TOKEN_PROGRAM_ID,
+                },
+                signers: [owner],
+            }
+        );
+
+        const factoryRewardVaultChanged = await getTokenAccount(connection, factory.vaultReward);
+        expect(`${factoryRewardVaultChanged.amount}`).to.be.eq(`${rewardTokensAmount}`);
+    });
 });

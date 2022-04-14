@@ -161,10 +161,24 @@ pub mod staking {
     /// Deposit a reward for stakers.
     /// The reward is distributed on demand pro rata staked tokens.
     pub fn deposit_reward(
-        _ctx: Context<DropReward>,
+        ctx: Context<DepositReward>,
+        amount: u64,
     ) -> Result<()> {
-        // Transfer rewards to the stake pool factory.
-        unimplemented!()
+        let token_program = ctx.accounts.token_program.to_account_info();
+        let from = ctx.accounts.vault_owner.to_account_info();
+        let to = ctx.accounts.vault_reward.to_account_info();
+        let authority = ctx.accounts.owner.to_account_info();
+
+        // TODO check the amount is less or equals to the amount of tokens inside vault_owner  
+        // and throw an erorr if needed
+
+        token::transfer(
+            CpiContext::new(
+                token_program,
+                token::Transfer { from, to, authority },
+            ), 
+            amount
+        )
     }
 
     /// Claims a reward for staked tokens.

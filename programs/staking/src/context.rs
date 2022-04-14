@@ -104,9 +104,6 @@ pub struct Deposit<'info> {
 }
 
 #[derive(Accounts)]
-pub struct Withdraw {}
-
-#[derive(Accounts)]
 #[instruction(reward_type: u8)]
 pub struct Stake<'info> {
     #[account(
@@ -157,6 +154,39 @@ pub struct Stake<'info> {
     pub system_program: Program<'info, System>,
 }
 
+
+#[derive(Accounts)]
+pub struct DepositReward<'info> {
+    #[account(
+        seeds = [Factory::PDA_SEED],
+        bump = factory.bump,
+    )]
+    pub factory: Account<'info, Factory>,
+    // The owner of the program. TODO Use multisig instead.
+    #[account(
+        mut,
+        constraint = owner.key() == factory.owner,
+    )]
+    pub owner: Signer<'info>,
+    #[account(
+        mut,
+        constraint = vault_owner.owner == owner.key(),
+        constraint = vault_owner.mint == factory.reward_token_mint
+    )]
+    pub vault_owner: Box<Account<'info, TokenAccount>>,
+    #[account(
+        mut,
+        constraint = vault_reward.owner == factory.key(),
+        constraint = vault_reward.mint == factory.reward_token_mint
+    )]
+    pub vault_reward: Box<Account<'info, TokenAccount>>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimReward {}
+
 #[derive(Accounts)]
 pub struct StartUnstake {}
 
@@ -164,12 +194,7 @@ pub struct StartUnstake {}
 pub struct FinishUnstake {}
 
 #[derive(Accounts)]
-pub struct ClaimReward {}
-
-#[derive(Accounts)]
-pub struct DropReward {
-    // TODO USE multisig
-}
+pub struct Withdraw {}
 
 #[derive(Accounts)]
 pub struct ChangeConfig {}
