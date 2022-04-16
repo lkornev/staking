@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use crate::account::*;
 use anchor_spl::token::{TokenAccount, Token, Mint};
 use anchor_spl::associated_token::AssociatedToken;
+use crate::error::SPError;
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -33,7 +34,13 @@ pub struct Initialize<'info> {
 #[derive(Accounts)]
 #[instruction(reward_type: u8)]
 pub struct NewStakePool<'info> {
-    #[account(mut, seeds = [Factory::PDA_SEED], bump = factory.bump)]
+    #[account(
+        mut, 
+        seeds = [Factory::PDA_SEED], 
+        bump = factory.bump,
+        // factory.owner == owner.key()
+        has_one = owner @ SPError::NewPoolOwnerMistmatch
+    )]
     pub factory: Account<'info, Factory>,
     #[account(
         init, 
@@ -43,17 +50,6 @@ pub struct NewStakePool<'info> {
         bump,
     )]
     pub stake_pool: Account<'info, StakePool>,
-    #[account(
-        init, 
-        payer = owner,
-        space = 8 + StakePoolConfig::SPACE,
-        seeds = [
-            &[0], // Index in the Config Histroy
-            stake_pool.to_account_info().key.as_ref(),
-        ],
-        bump,
-    )]
-    pub stake_pool_config: Account<'info, StakePoolConfig>,
     #[account(zero)]
     pub config_history: Account<'info, ConfigHistory>,
     #[account(mut)]
@@ -185,7 +181,52 @@ pub struct DepositReward<'info> {
 }
 
 #[derive(Accounts)]
-pub struct ClaimReward {}
+#[instruction(reward_type: u8)]
+pub struct ClaimReward<'info> {
+    #[account(
+        seeds = [Factory::PDA_SEED],
+        bump = factory.bump,
+    )]
+    pub factory: Account<'info, Factory>,
+    #[account(
+        seeds = [&[reward_type]],
+        bump = stake_pool.bump,
+        has_one = config_history,
+    )]
+    pub stake_pool: Account<'info, StakePool>,
+    pub config_history: Account<'info, ConfigHistory>,
+    #[account(
+        seeds = [
+            member.to_account_info().key.as_ref(),
+            stake_pool.to_account_info().key.as_ref(),
+        ],
+        bump,
+    )]
+    pub stakeholder: Account<'info, Stakeholder>,
+    #[account(
+        seeds = [
+            beneficiary.to_account_info().key.as_ref(),
+            factory.to_account_info().key.as_ref(),
+        ],
+        bump = member.bump,
+        has_one = beneficiary,
+    )]
+    pub member: Account<'info, Member>,
+    #[account(
+        // TODO add an error with useful text
+        constraint = vault_staked.owner == stakeholder.key(),
+    )]
+    pub vault_staked: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    pub beneficiary: Signer<'info>,
+    #[account(
+        // TODO add an error with useful text
+        constraint = external_vault.owner == beneficiary.key(),
+    )]
+    pub external_vault: Box<Account<'info, TokenAccount>>,
+    pub token_program: Program<'info, Token>,
+    pub clock: Sysvar<'info, Clock>,
+}
 
 #[derive(Accounts)]
 pub struct StartUnstake {}

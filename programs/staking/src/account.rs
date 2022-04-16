@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
 /// The program main state.
+/// This parameters cannot be changed after initialization.
 #[account]
 pub struct Factory {
     pub bump: u8,
@@ -10,6 +11,9 @@ pub struct Factory {
     pub owner_interest: u8,
     /// The amount of seconds should be passed before the next config change is allowed.
     pub config_change_delay: u128,
+    /// The time in seconds a Member have to wait to receive the next reward.
+    /// After each `reward_period` the Member are allowed to claim the reward.
+    pub reward_period: u64,
     /// Describes the type of the reward tokens.
     /// The mint itself does not need to be under control of the stake pool owner.
     /// It could be the wrapped Sol mint or any other spl token mint.
@@ -23,7 +27,7 @@ pub struct Factory {
 }
 
 impl Factory {
-    pub const SPACE: usize = 1 + 32 + 1 + 16 + 32 + 32 + 32;
+    pub const SPACE: usize = 1 + 32 + 1 + 16 + 8 + 32 + 32 + 32;
     pub const PDA_KEY: &'static str = "factory";
     pub const PDA_SEED: & 'static [u8] = Self::PDA_KEY.as_bytes();
 }
@@ -49,11 +53,11 @@ pub struct ConfigHistory {
     pub tail: u32,
     // Although a vec is used, the size is immutable
     // and defines during initialization.
-    pub history: Vec<Option<Pubkey>>,
+    pub history: Vec<Option<StakePoolConfig>>,
 }
 
 impl ConfigHistory {
-    pub fn append(&mut self, config: Pubkey) -> u32 {
+    pub fn append(&mut self, config: StakePoolConfig) -> u32 {
         let cursor = self.head;
 
         // Insert into next available slot.
@@ -78,7 +82,7 @@ impl ConfigHistory {
         self.history.len()
     }
 
-    pub fn get(&self, cursor: u32) -> Option<Pubkey> {
+    pub fn get(&self, cursor: u32) -> Option<StakePoolConfig> {
         self.history[cursor as usize % self.capacity()]
     }
 
@@ -91,14 +95,17 @@ impl ConfigHistory {
     }
 }
 
-#[account]
+#[derive(Default, Clone, Copy, Debug, AnchorSerialize, AnchorDeserialize)]
 pub struct StakePoolConfig{
-    // creating timestamp
-    pub created_at: i64,
-    /// Last time the config changed. Unix timestamp.
-    pub last_config_change: i64,
-    // The total amount of tokens that been staked by all users of the pool
-    // when this config was active.
+    /// The UNIX time when this config was created. 
+    // Invariant: The config that is added later has a timestamp greater than previous configs.
+    pub started_at: u64,
+    /// The UNIX time when this config was replaced by a new one. 
+    // Invariant: The config that is added later has the started_at timestamp 
+    // equals to the ended_at timestamp of the previous configs.
+    pub ended_at: Option<u64>,
+    /// The total amount of tokens that been staked by all users of the pool
+    /// when this config was active.
     pub total_staked_tokens: u128,
     /// The time in seconds a Member have to wait 
     /// to finish unstaking without paying the fee (`unstake_forse_fee_percent`).
@@ -108,9 +115,6 @@ pub struct StakePoolConfig{
     /// staked_tokens - (staked_tokens * unstake_forse_fee_percent) / 100.
     /// Should be in the range 0 - 100. (TODO check range)
     pub unstake_forse_fee_percent: u8,
-    /// The time in seconds a Member have to wait to receive the next reward.
-    /// After each `reward_period` the Member are allowed to claim the reward.
-    pub reward_period: u64,
     /// If the `reward_type` is Fixed
     /// `reward_metadata` is the fixed percentage of the income.
     /// Should be greather than 0 and less or equal to 100. (TODO check the range only if the reward_type is Fixed).
@@ -125,14 +129,14 @@ pub struct StakePoolConfig{
 }
 
 impl StakePoolConfig {
-    pub const SPACE: usize = 8 + 8 + 16 + 8 + 1 + 8 + 1 + 16;
+    pub const SPACE: usize = 8 + 8 + 16 + 8 + 1 + 1 + 16;
 }
 
 /// Member account represents a user of the stake pool factory program.
 #[account]
 pub struct Member {
     /// The owner and beneficiary of the Member account.
-    pub owner: Pubkey,
+    pub beneficiary: Pubkey,
     /// User can freely deposit and withdraw tokens to or from the `vault_free`.
     /// Tokens on the `vault_free` do not produce rewards.
     /// Used as a transit zone between external and internal wallets/vaults.
@@ -158,11 +162,13 @@ pub struct Stakeholder {
     pub owner: Pubkey,
     /// The tokens inside Stakeholder vault gain rewards.
     pub vault: Pubkey,
-    // The UNIX timestamp when the staking begins
-    pub staked_at: i64,
+    // The UNIX timestamp when the staking started
+    pub staked_at: u64,
+    // The config index in the congig history when the staking started
+    pub config_cursor: u32,
     pub bump: u8,
 }
 
 impl Stakeholder {
-    pub const SPACE: usize = 32 * 2 + 8 + 1;
+    pub const SPACE: usize = 32 * 2 + 8 + 4 + 1;
 }

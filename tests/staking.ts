@@ -39,19 +39,19 @@ describe("staking", () => {
     let owner: Signer;
     const ownerInterest = 1; // %
     const configChangeDelay = new BN(20); // secs
+    const rewardPeriod = new BN(30); // secs
 
     const configHistoryLength = 10;
     // TODO replace to PDA
     const configHistoryKeypair: Keypair = anchor.web3.Keypair.generate();
-    let configHistoryElSize: number = 16; // TODO get from the program
-    let configHistoryMetadata: number = 8 + 16 * 3; // TODO get from the program
+    let configHistoryElSize: number = 32; // TODO get from the program
+    let configHistoryMetadata: number = 4 + 4 + 8 * 3; // TODO get from the program
 
     let rewardTokenMint: PublicKey;
     let stakeTokenMint: PublicKey;
 
     let factoryPDA: PublicKey;
     let stakePoolFixedPDA: PublicKey;
-    let stakePoolConfigPDA: PublicKey;
 
     let vaultReward: Keypair;
 
@@ -74,6 +74,7 @@ describe("staking", () => {
             owner.publicKey,
             ownerInterest,
             configChangeDelay,
+            rewardPeriod,
             {
                 accounts: {
                     factory: factoryPDA,
@@ -95,6 +96,7 @@ describe("staking", () => {
         expect(`${factory.owner}`).to.be.eq(`${owner.publicKey}`);
         expect(factory.ownerInterest).to.be.eq(ownerInterest);
         expect(`${factory.configChangeDelay}`).to.be.eq(`${configChangeDelay}`);
+        expect(`${factory.rewardPeriod}`).to.be.eq(`${rewardPeriod}`);
         expect(`${factory.rewardTokenMint}`).to.be.eq(`${rewardTokenMint}`);
         expect(`${factory.stakeTokenMint}`).to.be.eq(`${stakeTokenMint}`);
         expect(`${factory.vaultReward}`).to.be.eq(`${vaultReward}`);
@@ -107,33 +109,21 @@ describe("staking", () => {
         );
         stakePoolFixedPDA = _stakePoolFixedPDA;
 
-        const [_stakePoolConfigPDA, _spcBump] = await PublicKey.findProgramAddress(
-            [
-                Uint8Array.from([0]), // Index in the Config Histroy
-                stakePoolFixedPDA.toBuffer()
-            ],
-            program.programId
-        );
-        stakePoolConfigPDA = _stakePoolConfigPDA;
-
         const unstakeDelay = new BN(40);
         const unstakeForseFeePercent = 50;
-        const rewardPeriod = new BN(30);
         const rewardMetadata = new BN(10);
 
         await program.rpc.new(
             RewardType.Fixed,
-            new BN(40), // secs
-            50, // %,
-            new BN(30), // secs
-            new BN(10), // %,
+            unstakeDelay, // secs
+            unstakeForseFeePercent, // %,
+            rewardMetadata, // %,
             configHistoryLength,
             spfBump,
             {
                 accounts: {
                     factory: factoryPDA,
                     stakePool: stakePoolFixedPDA,
-                    stakePoolConfig: stakePoolConfigPDA,
                     configHistory: configHistoryKeypair.publicKey,
                     owner: owner.publicKey,
                     clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
@@ -151,19 +141,18 @@ describe("staking", () => {
 
         const stakePool = await program.account.stakePool.fetch(stakePoolFixedPDA);
         const configHistory = await program.account.configHistory.fetch(configHistoryKeypair.publicKey);
-        const stakePoolConfig = await program.account.stakePoolConfig.fetch(stakePoolConfigPDA);
 
         expect(`${stakePool.configHistory}`).to.be.eq(`${configHistoryKeypair.publicKey}`);
-        expect(`${configHistory.history[0]}`).to.be.eq(`${stakePoolConfigPDA}`);
 
         for (let i = 1; i < configHistoryLength; i++) {
             expect(configHistory.history[i], `el № ${i}`).to.be.eq(null);
         }
 
+        const stakePoolConfig = configHistory.history[0];
+
         expect(`${stakePoolConfig.totalStakedTokens}`).to.be.eq(`${0}`);
         expect(`${stakePoolConfig.unstakeDelay}`).to.be.eq(`${unstakeDelay}`);
         expect(`${stakePoolConfig.unstakeForseFeePercent}`).to.be.eq(`${unstakeForseFeePercent}`);
-        expect(`${stakePoolConfig.rewardPeriod}`).to.be.eq(`${rewardPeriod}`);
         expect(stakePoolConfig.rewardType).to.be.eq(RewardType.Fixed);
         expect(`${stakePoolConfig.rewardMetadata}`).to.be.eq(`${rewardMetadata}`);
     });
@@ -259,7 +248,7 @@ describe("staking", () => {
 
         const member = await program.account.member.fetch(memberPDA);
 
-        expect(`${member.owner}`).to.be.eq(`${beneficiary.publicKey}`);
+        expect(`${member.beneficiary}`).to.be.eq(`${beneficiary.publicKey}`);
         expect(`${member.vaultFree}`).to.be.eq(`${vaultFree.publicKey}`);
         expect(`${member.vaultPendingUnstaking}`).to.be.eq(`${vaultPendingUnstaking.publicKey}`);
         expect(member.bump).to.be.eq(memberBump);
