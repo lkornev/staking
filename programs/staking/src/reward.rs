@@ -32,8 +32,8 @@ impl Reward {
     ) -> (u64, u32) {
         match self {
             Reward::Fixed => {
-                // Config cursor is a index of the active config in the config history
-                // that stakeholder account will use retreive actuall coeffitients
+                // Config cursor is an index of the active config in the config history 
+                // that stakeholder account will use to retrieve actual coefficients
                 let mut config_cursor = stakeholder.config_cursor;
                 let mut reward_coeff: f64 = 0.0;
 

@@ -202,7 +202,7 @@ pub mod staking {
 
         // TODO if reward_tokens_amount = 0 return an error
         // TODO set config_cursor to stakeholder
-        // TODO send reward tokens from vault_staked to the beneficiary's external_vault
+        // TODO send reward tokens from vault_reward to the beneficiary's external_vault
 
         // TODO Transfer the factory owner one's owner_interest in the reward tokens.
         Ok(())

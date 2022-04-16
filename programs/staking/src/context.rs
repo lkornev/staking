@@ -217,6 +217,13 @@ pub struct ClaimReward<'info> {
         constraint = vault_staked.owner == stakeholder.key(),
     )]
     pub vault_staked: Box<Account<'info, TokenAccount>>,
+    #[account(
+        mut,
+        // TODO add an error with useful text
+        constraint = vault_reward.owner == factory.key(),
+        constraint = vault_reward.mint == factory.reward_token_mint
+    )]
+    pub vault_reward: Box<Account<'info, TokenAccount>>,
     #[account(mut)]
     pub beneficiary: Signer<'info>,
     #[account(
