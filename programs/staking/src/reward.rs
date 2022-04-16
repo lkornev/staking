@@ -46,7 +46,7 @@ impl Reward {
 
                 // The unix time when the last full reward period ends
                 let last_full_period_ends_at: u64 = current_timestamp - 
-                    (current_timestamp - stakeholder.staked_at) % reward_period;
+                    ((current_timestamp - stakeholder.staked_at) % reward_period);
 
                 let mut current_period_ends_at: u64 = stakeholder.staked_at + reward_period;
                 let mut processing_time_at = stakeholder.staked_at;
