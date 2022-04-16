@@ -136,6 +136,10 @@ mod tests {
         let config_history_length: usize = 10;
         let staked_at: u64 = 1650106095;
 
+        let reward_period = 500; // secs
+        let staked_by_user = 100; // tokens
+        let current_timestamp = staked_at + 1100; // Little bit more than two reward periods
+
         let mut config_history = ConfigHistory {
             head: 0,
             tail: 0,
@@ -164,10 +168,6 @@ mod tests {
             staked_at,
             config_cursor: 0, // we start from the beggining for the config history
         };
-
-        let reward_period = 500; // secs
-        let staked_by_user = 100; // tokens
-        let current_timestamp = staked_at + 1100; // Little bit more than two reward periods
 
         let (reward, cursor) = reward
             .calculate(
@@ -245,6 +245,58 @@ mod tests {
 
         assert_eq!(reward, 12);
         assert_eq!(cursor, 1);
+    }
+
+    #[test]
+    fn zero_rewards() {
+        let reward = Reward::Fixed;
+        let config_history_length: usize = 10;
+        let staked_at: u64 = 1650106095;
+
+        let reward_period = 500; // secs
+        let staked_by_user = 100; // tokens
+        let current_timestamp = staked_at + 400; // Little bit less than the reward period
+
+        let mut config_history = ConfigHistory {
+            head: 0,
+            tail: 0,
+            history: vec![None; config_history_length],
+        };
+
+        let config = StakePoolConfig {
+            started_at: staked_at - 1000, // started some time before the stake happend
+            ended_at: None, // Not ended
+            reward_metadata: 10, // % reward rate
+            total_staked_tokens: 1000, // it does not matter for the test
+            unstake_delay: 100, // it does not matter for the test
+            unstake_forse_fee_percent: 10, // it does not matter for the test
+            reward_type: Reward::Fixed.into()
+        };
+
+        config_history.append(config);
+
+        assert_eq!(config_history.head(), 1);
+        assert_eq!(config_history.tail(), 0);
+
+        let stakeholder = Stakeholder {
+            owner: Pubkey::default(), // it does not matter for the test
+            vault: Pubkey::default(), // it does not matter for the test
+            bump: u8::default(), // it does not matter for the test
+            staked_at,
+            config_cursor: 0, // we start from the beggining for the config history
+        };
+
+        let (reward, cursor) = reward
+            .calculate(
+                reward_period, 
+                staked_by_user, 
+                current_timestamp,
+                &config_history, 
+                &stakeholder,
+            );
+
+        assert_eq!(reward, 0);
+        assert_eq!(cursor, 0);
     }
 
     // TODO add more tests and rewrite Reward::Fixed::calculate ;)
