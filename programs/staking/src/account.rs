@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use crate::reward::Reward;
 
 /// The program main state.
 /// This parameters cannot be changed after initialization.
@@ -95,7 +96,7 @@ impl ConfigHistory {
     }
 }
 
-#[derive(Default, Clone, Copy, Debug, AnchorSerialize, AnchorDeserialize)]
+#[derive(Clone, Copy, Debug, AnchorSerialize, AnchorDeserialize)]
 pub struct StakePoolConfig{
     /// The UNIX time when this config was created. 
     // Invariant: The config that is added later has a timestamp greater than previous configs.
@@ -124,7 +125,7 @@ pub struct StakePoolConfig{
     /// `reward_metadata` is the amount of reward tokens that will be shared 
     /// in proportion to the user's staked tokens among all members.
     /// Should be greather than 0.
-    pub reward_type: u8,
+    pub reward_type: Reward,
     pub reward_metadata: u128,
 }
 

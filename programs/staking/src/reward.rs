@@ -1,10 +1,7 @@
-use std::convert::TryFrom; 
-use crate::SPError;
 use crate::account::{ConfigHistory, Stakeholder};
-use anchor_lang::prelude::{Error};
-use anchor_lang::err;
+use anchor_lang::prelude::*;
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone, Copy, PartialOrd, Ord)]
 pub enum Reward {
     /// A stakeholder will receive a fixed amount of reward tokens pro rata one's staked tokens.
     /// E.g. staked tokens: 300, `reward_per_token`: 5 %.
@@ -98,27 +95,6 @@ impl Reward {
             Reward::Unfixed => {
                 unimplemented!();
             },
-        }
-    }
-}
-
-impl TryFrom<u8> for Reward {
-    type Error = Error;
-
-    fn try_from(orig: u8) -> Result<Self, Self::Error> {
-        match orig {
-            0 => Ok(Reward::Fixed),
-            1 => Ok(Reward::Unfixed),
-            _ => err!(SPError::RewardTypeMismatch),
-        }
-    }
-}
-
-impl Into<u8> for Reward {
-    fn into(self: Reward) -> u8 {
-        match self {
-            Reward::Fixed => 0,
-            Reward::Unfixed => 1,
         }
     }
 }

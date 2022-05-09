@@ -30,17 +30,28 @@ export async function createUserWithLamports(
     return account;
 }
 
-export async function createTokenMint(
+export async function createUserWithATA(
     connection: Connection,
-    authority: PublicKey,
-    feePayer: Signer,
-    decimals = 0
-): Promise<PublicKey> {
-    return await createMint(
+    mint: PublicKey,
+    lamports = 100
+): Promise<[Signer, TokenAccount]> {
+    let user = await createUserWithLamports(connection, lamports);
+    let ata = await getOrCreateAssociatedTokenAccount(
         connection,
-        feePayer,
-        authority,
-        authority,
-        decimals,
+        user,
+        mint,
+        user.publicKey
     );
+
+    return Promise.all([user, ata]);
+}
+
+export async function sleep(ms) {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function sleepTill(tillMs) {
+    if (Date.now() < tillMs) {
+        await sleep(tillMs - Date.now());
+    }
 }

@@ -1,365 +1,48 @@
 import * as anchor from "@project-serum/anchor";
-import { Program, BN } from "@project-serum/anchor";
-import { Staking } from "../target/types/staking";
+import { BN } from "@project-serum/anchor";
 import {
-    createUserWithLamports,
-    createTokenMint,
-} from "./helpers";
-import {
-    PublicKey,
     SystemProgram,
-    Keypair,
-    Connection,
-    Signer,
 } from '@solana/web3.js';
 import { 
-    createMint,
     TOKEN_PROGRAM_ID, 
     createAccount as createTokenAccount,
-    getOrCreateAssociatedTokenAccount,
     Account as TokenAccount,
-    mintTo,
     getAccount as getTokenAccount,
-    createApproveInstruction,
-    NATIVE_MINT,
-    ASSOCIATED_TOKEN_PROGRAM_ID,
-    getAssociatedTokenAddress,
 } from '@solana/spl-token';
-import { expect, assert } from 'chai';
-import { RewardType } from "./reward";
-
+import { expect } from 'chai';
+import { Reward } from "./types/reward";
+import { Ctx, createCtx } from './ctx/ctx';
+import { initializeRPC } from './rpc/initialize';
+import { newStakePoolRPC } from './rpc/new-stake-pool';
+import { depositRPC } from './rpc/deposit';
+import { stakeRPC } from './rpc/stake';
+import { depositRewardRPC } from "./rpc/deposit-reward";
+import { Check } from "./check/check";
 
 describe("staking", () => {
-    anchor.setProvider(anchor.Provider.env());
-
-    const connection = new Connection("http://localhost:8899", 'recent');
-
-    const program = anchor.workspace.Staking as Program<Staking>;
-
-    let owner: Signer;
-    const ownerInterest = 1; // %
-    const configChangeDelay = new BN(20); // secs
-    const rewardPeriod = new BN(30); // secs
-
-    const configHistoryLength = 10;
-    // TODO replace to PDA
-    const configHistoryKeypair: Keypair = anchor.web3.Keypair.generate();
-    let configHistoryElSize: number = 32; // TODO get from the program
-    let configHistoryMetadata: number = 4 + 4 + 8 * 3; // TODO get from the program
-
-    let rewardTokenMint: PublicKey;
-    let stakeTokenMint: PublicKey;
-
-    let factoryPDA: PublicKey;
-    let stakePoolFixedPDA: PublicKey;
-
-    let vaultReward: Keypair;
-
-    it("Creates reward and stake mints", async () => {
-        owner = await createUserWithLamports(connection, 10);
-        rewardTokenMint = await createTokenMint(connection, owner.publicKey, owner, 6);
-        stakeTokenMint = await createTokenMint(connection, owner.publicKey, owner, 9);
-    });
+    anchor.setProvider(anchor.AnchorProvider.env());
+    let ctx: Ctx;
 
     it("Initializes factory!", async () => {
-        const [_factoryPDA, _factoryBump] = await PublicKey.findProgramAddress(
-            [anchor.utils.bytes.utf8.encode("factory")],
-            program.programId
-        );
-        factoryPDA = _factoryPDA;
-
-        const vaultReward = await getAssociatedTokenAddress(rewardTokenMint, factoryPDA, true)
-
-        await program.rpc.initialize(
-            owner.publicKey,
-            ownerInterest,
-            configChangeDelay,
-            rewardPeriod,
-            {
-                accounts: {
-                    factory: factoryPDA,
-                    rewardTokenMint,
-                    stakeTokenMint,
-                    vaultReward,
-                    initializer: owner.publicKey,
-                    systemProgram: SystemProgram.programId,
-                    tokenProgram: TOKEN_PROGRAM_ID,
-                    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-                    rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-                },
-                signers: [owner],
-            }
-        );
-
-        const factory = await program.account.factory.fetch(factoryPDA);
-
-        expect(`${factory.owner}`).to.be.eq(`${owner.publicKey}`);
-        expect(factory.ownerInterest).to.be.eq(ownerInterest);
-        expect(`${factory.configChangeDelay}`).to.be.eq(`${configChangeDelay}`);
-        expect(`${factory.rewardPeriod}`).to.be.eq(`${rewardPeriod}`);
-        expect(`${factory.rewardTokenMint}`).to.be.eq(`${rewardTokenMint}`);
-        expect(`${factory.stakeTokenMint}`).to.be.eq(`${stakeTokenMint}`);
-        expect(`${factory.vaultReward}`).to.be.eq(`${vaultReward}`);
+        ctx = await createCtx();
+        await initializeRPC(ctx);
+        await Check.factory(ctx);        
     });
 
     it("Creates new staking pool instance with fixed rewards", async () => {
-        const [_stakePoolFixedPDA, spfBump] = await PublicKey.findProgramAddress(
-            [ Uint8Array.from([RewardType.Fixed]) ],
-            program.programId
-        );
-        stakePoolFixedPDA = _stakePoolFixedPDA;
-
-        const unstakeDelay = new BN(40);
-        const unstakeForseFeePercent = 50;
-        const rewardMetadata = new BN(10);
-
-        await program.rpc.new(
-            RewardType.Fixed,
-            unstakeDelay, // secs
-            unstakeForseFeePercent, // %,
-            rewardMetadata, // %,
-            configHistoryLength,
-            spfBump,
-            {
-                accounts: {
-                    factory: factoryPDA,
-                    stakePool: stakePoolFixedPDA,
-                    configHistory: configHistoryKeypair.publicKey,
-                    owner: owner.publicKey,
-                    clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-                    systemProgram: SystemProgram.programId,
-                },
-                signers: [owner, configHistoryKeypair],
-                preInstructions: [
-                    await program.account.configHistory.createInstruction(
-                        configHistoryKeypair, 
-                        configHistoryLength * configHistoryElSize + configHistoryMetadata
-                    ),
-                ]
-            }
-        );
-
-        const stakePool = await program.account.stakePool.fetch(stakePoolFixedPDA);
-        const configHistory = await program.account.configHistory.fetch(configHistoryKeypair.publicKey);
-
-        expect(`${stakePool.configHistory}`).to.be.eq(`${configHistoryKeypair.publicKey}`);
-
-        for (let i = 1; i < configHistoryLength; i++) {
-            expect(configHistory.history[i], `el № ${i}`).to.be.eq(null);
-        }
-
-        const stakePoolConfig = configHistory.history[0];
-
-        expect(`${stakePoolConfig.totalStakedTokens}`).to.be.eq(`${0}`);
-        expect(`${stakePoolConfig.unstakeDelay}`).to.be.eq(`${unstakeDelay}`);
-        expect(`${stakePoolConfig.unstakeForseFeePercent}`).to.be.eq(`${unstakeForseFeePercent}`);
-        expect(stakePoolConfig.rewardType).to.be.eq(RewardType.Fixed);
-        expect(`${stakePoolConfig.rewardMetadata}`).to.be.eq(`${rewardMetadata}`);
+        await newStakePoolRPC(ctx);
+        await Check.newStakePool(ctx);
     });
-
-    let beneficiary: Signer;
-    let beneficiaryTokenAccount: TokenAccount;
-    const stakeTokenAmount = 1000;
-    const amountToDeposit = new BN(stakeTokenAmount);
-    const amountToStake = new BN(stakeTokenAmount);
-
-    let vaultFree: Keypair;
-    let vaultPendingUnstaking: Keypair;
-    let memberPDA: PublicKey;
-    let memberBump: number;
-
-    it("Create member PDA and token vaults", async () => {
-        beneficiary = await createUserWithLamports(connection, 1);
-
-        beneficiaryTokenAccount = await getOrCreateAssociatedTokenAccount(
-            connection,
-            beneficiary, // Payer
-            stakeTokenMint,
-            beneficiary.publicKey, // Owner
-        );
-
-        await mintTo(
-            connection,
-            owner,  // Payer
-            stakeTokenMint,
-            beneficiaryTokenAccount.address, // mint to
-            owner, // Authority
-            stakeTokenAmount,
-        );
-
-        vaultFree = anchor.web3.Keypair.generate();
-        vaultPendingUnstaking = anchor.web3.Keypair.generate();
-
-        const [_memberPDA, _memberBump] = await PublicKey.findProgramAddress(
-            [
-                beneficiary.publicKey.toBuffer(),
-                factoryPDA.toBuffer(),
-            ],
-            program.programId
-        );
-        memberPDA = _memberPDA;
-        memberBump = _memberBump;
-
-        await createTokenAccount(
-            connection,
-            beneficiary, // Payer
-            stakeTokenMint,
-            memberPDA, // Owner
-            vaultFree, // Keypair
-        );
-
-        await createTokenAccount(
-            connection,
-            beneficiary, // Payer
-            stakeTokenMint,
-            memberPDA, // Owner
-            vaultPendingUnstaking, // Keypair
-        );
-
-        const beneficiaryAccountState = await getTokenAccount(connection, beneficiaryTokenAccount.address);
-        const memberVaultFree = await getTokenAccount(connection, vaultFree.publicKey);
-        const memberVaultPU = await getTokenAccount(connection, vaultPendingUnstaking.publicKey);
-
-        expect(`${beneficiaryAccountState.amount}`).to.be.eq(`${stakeTokenAmount}`);
-        expect(`${memberVaultFree.amount}`).to.be.eq(`0`);
-        expect(`${memberVaultPU.amount}`).to.be.eq(`0`);
-    });
-
-    let vaultStaked: Keypair;
 
     it("Deposits tokens", async () => {
-       await program.rpc.deposit(
-            memberBump,
-            amountToDeposit,
-            {
-                accounts: {
-                    factory: factoryPDA,
-                    beneficiary: beneficiary.publicKey,
-                    beneficiaryTokenAccount: beneficiaryTokenAccount.address,
-                    member: memberPDA,
-                    vaultFree: vaultFree.publicKey,
-                    vaultPendingUnstaking: vaultPendingUnstaking.publicKey,
-                    systemProgram: SystemProgram.programId,
-                    tokenProgram: TOKEN_PROGRAM_ID,
-                },
-                signers: [beneficiary],
-            }
-        );
-
-        const member = await program.account.member.fetch(memberPDA);
-
-        expect(`${member.beneficiary}`).to.be.eq(`${beneficiary.publicKey}`);
-        expect(`${member.vaultFree}`).to.be.eq(`${vaultFree.publicKey}`);
-        expect(`${member.vaultPendingUnstaking}`).to.be.eq(`${vaultPendingUnstaking.publicKey}`);
-        expect(member.bump).to.be.eq(memberBump);
-
-        const beneficiaryAccountState = await getTokenAccount(connection, beneficiaryTokenAccount.address);
-        const memberVaultFree = await getTokenAccount(connection, member.vaultFree);
-
-        expect(`${beneficiaryAccountState.amount}`).to.be.eq(`0`);
-        expect(`${memberVaultFree.amount}`).to.be.eq(`${stakeTokenAmount}`);
+        await Check.memberFixedDeposit(ctx, depositRPC);
     });
 
-    let stakeholderFixedPDA: PublicKey;
-    let stakeholderFixedBump: number;
-    
     it("Stake tokens", async () => { 
-        const [_stakeholderFixedPDA, _stakeholderFixedBump] = await PublicKey.findProgramAddress(
-            [
-                memberPDA.toBuffer(),
-                stakePoolFixedPDA.toBuffer(),
-            ],
-            program.programId
-        );
-        stakeholderFixedPDA = _stakeholderFixedPDA;
-        stakeholderFixedBump = _stakeholderFixedBump;
-
-        vaultStaked = anchor.web3.Keypair.generate();
-        await createTokenAccount(
-            connection,
-            beneficiary, // Payer
-            stakeTokenMint,
-            stakeholderFixedPDA, // Owner
-            vaultStaked, // Keypair
-        );
-
-        const stakeholderVault = await getTokenAccount(connection, vaultStaked.publicKey);
-        expect(`${stakeholderVault.amount}`).to.be.eq(`0`);
-
-        await program.rpc.stake(
-            RewardType.Fixed,
-            stakeholderFixedBump,
-            amountToStake,
-            {
-                accounts: {
-                    factory: factoryPDA,
-                    stakePool: stakePoolFixedPDA,
-                    beneficiary: beneficiary.publicKey,
-                    member: memberPDA,
-                    vaultFree: vaultFree.publicKey,
-                    stakeholder: stakeholderFixedPDA,
-                    vaultStaked: vaultStaked.publicKey,
-                    clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-                    systemProgram: SystemProgram.programId,
-                    tokenProgram: TOKEN_PROGRAM_ID,
-                },
-                signers: [beneficiary],
-            }
-        );
-
-        // TODO check stakeholder fields
-
-        const member = await program.account.member.fetch(memberPDA);
-        const memberVaultFree = await getTokenAccount(connection, member.vaultFree);
-        expect(`${memberVaultFree.amount}`).to.be.eq(`${0}`);
-
-        const stakeholderVaultChanged = await getTokenAccount(connection, vaultStaked.publicKey);
-        expect(`${stakeholderVaultChanged.amount}`).to.be.eq(`${amountToStake}`);
+        await Check.memberFixedStake(ctx, stakeRPC);
     });
 
-    const rewardTokensAmount = 100000000;
-    let ownerTokenAccount: TokenAccount;
-
-    it("Create owner account with reward tokens", async () => {
-        ownerTokenAccount = await getOrCreateAssociatedTokenAccount(
-            connection,
-            owner, // Payer
-            rewardTokenMint,
-            owner.publicKey, // Owner
-        );
-
-        await mintTo(
-            connection,
-            owner,  // Payer
-            rewardTokenMint,
-            ownerTokenAccount.address, // mint to
-            owner, // Authority
-            rewardTokensAmount,
-        );
-    });
-
-    it("Deposits tokens", async () => {
-        const factory = await program.account.factory.fetch(factoryPDA);
-        const factoryRewardVault = await getTokenAccount(connection, factory.vaultReward);
-
-        expect(`${factoryRewardVault.amount}`).to.be.eq(`0`);
-
-        await program.rpc.depositReward(
-            new BN(rewardTokensAmount),
-            {
-                accounts: {
-                    factory: factoryPDA,
-                    owner: owner.publicKey,
-                    vaultOwner: ownerTokenAccount.address,
-                    vaultReward: factory.vaultReward,
-                    systemProgram: SystemProgram.programId,
-                    tokenProgram: TOKEN_PROGRAM_ID,
-                },
-                signers: [owner],
-            }
-        );
-
-        const factoryRewardVaultChanged = await getTokenAccount(connection, factory.vaultReward);
-        expect(`${factoryRewardVaultChanged.amount}`).to.be.eq(`${rewardTokensAmount}`);
+    it("Deposits tokens reward", async () => {
+        await Check.depositReward(ctx, depositRewardRPC, { rewardAmountBefore: 0 });
     });
 });

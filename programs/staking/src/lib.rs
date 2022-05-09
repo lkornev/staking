@@ -35,10 +35,9 @@ pub mod staking {
     }
 
     /// Create a new stake pool instance
-    #[access_control(valid_reward_type(reward_type))]
     pub fn new(
         ctx: Context<NewStakePool>,
-        reward_type: u8, // Reward enum
+        reward_type: Reward, // Reward enum
         unstake_delay: u64,
         unstake_forse_fee_percent: u8,
         reward_metadata: u128, // Could be any data depending on the `reward_type`
@@ -92,13 +91,13 @@ pub mod staking {
         member.vault_pending_unstaking = (*ctx.accounts.vault_pending_unstaking).key();
         member.bump = member_bump;
 
+        let beneficiary_tokens = ctx.accounts.beneficiary_token_account.amount;
+        require!(amount <= beneficiary_tokens, SPError::InsufficientAmountOfTokensToDeposit);
+
         let token_program = ctx.accounts.token_program.to_account_info();
         let from = ctx.accounts.beneficiary_token_account.to_account_info();
         let to = (*ctx.accounts.vault_free).to_account_info();
         let authority = ctx.accounts.beneficiary.to_account_info();
-
-        // TODO check the amount is less or equals to the beneficiary_token_account amount of tokens 
-        // and throw an erorr if needed
 
         token::transfer(
             CpiContext::new(
@@ -113,10 +112,9 @@ pub mod staking {
     /// Tokens inside `stakeholder valut` allow to get rewards pro rata staked amount.
     /// Member can stake coins from one's `vault free` to any stake.
     /// Member must claim the rewards before staking more tokens to the same pool. (TODO Check)
-    #[access_control(valid_reward_type(reward_type))]
     pub fn stake(
         ctx: Context<Stake>,
-        reward_type: u8, // Reward enum. It's used in stake pool seeds
+        reward_type: Reward,
         stakeholder_bump: u8,
         amount: u64, // The amount of the tokens to stake
     ) -> Result<()> {
@@ -179,10 +177,9 @@ pub mod staking {
     }
 
     /// Claim the reward for staked tokens
-    #[access_control(valid_reward_type(reward_type))]
     pub fn claim_reward(
         ctx: Context<ClaimReward>,
-        reward_type: u8, // Reward Type enum
+        reward_type: Reward,
     ) -> Result<()> {
         let factory = &ctx.accounts.factory;
         let config_history = &ctx.accounts.config_history;
@@ -190,7 +187,7 @@ pub mod staking {
         let vault_staked = &ctx.accounts.vault_staked;
         let clock = &ctx.accounts.clock;
 
-        let (reward_tokens_amoun, config_cursor) = Reward::try_from(reward_type).unwrap()
+        let (reward_tokens_amoun, config_cursor) = reward_type
             .calculate(
                 factory.reward_period, 
                 vault_staked.amount,
@@ -260,10 +257,4 @@ pub mod staking {
         // add the new config to the config history in a single transaction.
         unimplemented!()
     }
-}
-
-// Access control checks
-
-fn valid_reward_type<'info>(reward_type: u8) -> Result<()> {
-    Reward::try_from(reward_type).map(|_rew| ())
 }
