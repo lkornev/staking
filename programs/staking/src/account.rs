@@ -46,9 +46,9 @@ impl StakePool {
 
 #[account]
 pub struct ConfigHistory {
-    // Invariant: index is position of the next available slot.
+    // Invariant: index is the position of the next available slot.
     pub head: u32,
-    // Invariant: index is position of the first (oldest) taken slot.
+    // Invariant: index is the position of the first (oldest) taken slot.
     // Invariant: head == tail => queue is initialized.
     // Invariant: index_of(head + 1) == index_of(tail) => queue is full.
     pub tail: u32,
@@ -97,14 +97,14 @@ impl ConfigHistory {
 }
 
 #[derive(Clone, Copy, Debug, AnchorSerialize, AnchorDeserialize)]
-pub struct StakePoolConfig{
+pub struct StakePoolConfig {
     /// The UNIX time when this config was created. 
     // Invariant: The config that is added later has a timestamp greater than previous configs.
-    pub started_at: u64,
+    pub started_at: i64,
     /// The UNIX time when this config was replaced by a new one. 
     // Invariant: The config that is added later has the started_at timestamp 
     // equals to the ended_at timestamp of the previous configs.
-    pub ended_at: Option<u64>,
+    pub ended_at: Option<i64>,
     /// The total amount of tokens that been staked by all users of the pool
     /// when this config was active.
     pub total_staked_tokens: u128,
@@ -156,20 +156,21 @@ impl Member {
     pub const SPACE: usize = 32 * 3 + 8;
 }
 
-/// It's leterally holds a stake
 #[account]
-pub struct Stakeholder {
+pub struct MemberStake {
+    /// StakePool the member has the stake in
+    pub stake_pool: Pubkey,
     /// The owner and beneficiary of the stake and the Member account.
     pub owner: Pubkey,
     /// The tokens inside Stakeholder vault gain rewards.
     pub vault: Pubkey,
     // The UNIX timestamp when the staking started
-    pub staked_at: u64,
+    pub staked_at: i64,
     // The config index in the congig history when the staking started
     pub config_cursor: u32,
     pub bump: u8,
 }
 
-impl Stakeholder {
-    pub const SPACE: usize = 32 * 2 + 8 + 4 + 1;
+impl MemberStake {
+    pub const SPACE: usize = 32 * 3 + 8 + 4 + 1;
 }

@@ -18,7 +18,7 @@ export async function stakeRPC(ctx: CtxRPC, stakePool: StakePool, member: Member
         beneficiary: member.beneficiary.publicKey,
         member: member.key,
         vaultFree: member.vaultFree.publicKey,
-        stakeholder: memberStake.key,
+        memberStake: memberStake.key,
         vaultStaked: memberStake.vaultStaked.publicKey,
         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
         systemProgram: SystemProgram.programId,

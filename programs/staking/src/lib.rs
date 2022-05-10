@@ -3,8 +3,6 @@ mod reward; use reward::*;
 mod account; use account::*;
 mod context; use context::*;
 mod error; use error::SPError;
-use anchor_spl::token;
-use std::convert::TryFrom;
 
 declare_id!("5E1FrMGJa9S1qJHXVZKdhuu3WF8BrwzNdx1JKARyNbVm");
 
@@ -46,8 +44,7 @@ pub mod staking {
         bump: u8,
     ) -> Result<()> {
         let stake_pool_config = StakePoolConfig {
-            started_at: u64::try_from(ctx.accounts.clock.unix_timestamp)
-                .expect("Creation time should be positive integer"),
+            started_at: ctx.accounts.clock.unix_timestamp,
             ended_at: None,
             total_staked_tokens: 0,
             unstake_delay,
@@ -106,46 +103,28 @@ pub mod staking {
         ctx.accounts.transfer_user_tokens_to_program(amount)
     }
 
-    /// Move tokens from the `vault free` to the `stakeholder valut`
-    /// Tokens inside `stakeholder valut` allow to get rewards pro rata staked amount.
+    /// Move tokens from the `vault free` to the `MemberStake valut`
+    /// Tokens inside `MemberStake valut` allow to get rewards pro rata staked amount.
     /// Member can stake coins from one's `vault free` to any stake.
     /// Member must claim the rewards before staking more tokens to the same pool. (TODO Check)
+    #[allow(unused_variables)] // but it's not
     pub fn stake(
         ctx: Context<Stake>,
-        reward_type: Reward,
-        stakeholder_bump: u8,
+        reward: Reward,
+        member_stake_bump: u8,
         amount: u64, // The amount of the tokens to stake
     ) -> Result<()> {
-        let stakeholder = &mut ctx.accounts.stakeholder;
-        let token_program = ctx.accounts.token_program.to_account_info();
-        let from = (*ctx.accounts.vault_free).to_account_info();
-        let to = (*ctx.accounts.vault_staked).to_account_info();
-        let authority = ctx.accounts.member.to_account_info();
-
         // TODO check the amount is less or equals to the vault_free amount of tokens 
         // and throw an erorr if needed
 
-        // TODO rename stakeholder to MemberStake
-        stakeholder.owner = *ctx.accounts.beneficiary.owner;
-        stakeholder.vault = to.key();
-        stakeholder.staked_at =  u64::try_from(ctx.accounts.clock.unix_timestamp)
-            .expect("Staking time should be positive integer");
-        stakeholder.bump = stakeholder_bump;
+        let member_stake = &mut ctx.accounts.member_stake;
+        member_stake.owner = *ctx.accounts.beneficiary.owner;
+        member_stake.vault = ctx.accounts.vault_staked.key();
+        member_stake.staked_at = ctx.accounts.clock.unix_timestamp;
+        member_stake.bump = member_stake_bump;
+        member_stake.stake_pool = ctx.accounts.stake_pool.key();
 
-        let seeds = &[
-            ctx.accounts.beneficiary.to_account_info().key.as_ref(),
-            ctx.accounts.factory.to_account_info().key.as_ref(),
-            &[ctx.accounts.member.bump]
-        ];
-
-        token::transfer(
-            CpiContext::new_with_signer(
-                token_program,
-                token::Transfer { to, from, authority },
-                &[&seeds[..]],
-            ),
-            amount
-        )?;
+        ctx.accounts.transfer_tokens_to_staked_vault(amount)?;
 
         // TODO update total_staked_tokens in the stake pool config
 
@@ -158,21 +137,10 @@ pub mod staking {
         ctx: Context<DepositReward>,
         amount: u64,
     ) -> Result<()> {
-        let token_program = ctx.accounts.token_program.to_account_info();
-        let from = ctx.accounts.vault_owner.to_account_info();
-        let to = ctx.accounts.vault_reward.to_account_info();
-        let authority = ctx.accounts.owner.to_account_info();
-
         // TODO check the amount is less or equals to the amount of tokens inside vault_owner  
         // and throw an erorr if needed
 
-        token::transfer(
-            CpiContext::new(
-                token_program,
-                token::Transfer { from, to, authority },
-            ), 
-            amount
-        )
+        ctx.accounts.transfer_tokens_to_reward_vault(amount)
     }
 
     /// Claim the reward for staked tokens
@@ -182,22 +150,20 @@ pub mod staking {
     ) -> Result<()> {
         let factory = &ctx.accounts.factory;
         let config_history = &ctx.accounts.config_history;
-        let stakeholder = &ctx.accounts.stakeholder;
         let vault_staked = &ctx.accounts.vault_staked;
         let clock = &ctx.accounts.clock;
 
-        let (reward_tokens_amoun, config_cursor) = reward_type
+        let (_reward_tokens_amoun, _config_cursor) = reward_type
             .calculate(
                 factory.reward_period, 
                 vault_staked.amount,
-                u64::try_from(clock.unix_timestamp)
-                    .expect("Current time should be positive integer"),
+                clock.unix_timestamp,
                 &config_history,
-                &stakeholder,
+                &ctx.accounts.member_stake,
             );
 
         // TODO if reward_tokens_amount = 0 return an error
-        // TODO set config_cursor to stakeholder
+        // TODO set config_cursor in the MemberStake
         // TODO send reward tokens from vault_reward to the beneficiary's external_vault
 
         // TODO Transfer the factory owner one's owner_interest in the reward tokens.
@@ -211,7 +177,7 @@ pub mod staking {
     pub fn start_unstake(
         _ctx: Context<StartUnstake>,
     ) -> Result<()> {
-        // TODO remove stakeholder account and return lamports to the stake's owner
+        // TODO remove MemberStake account and return lamports to the stake's owner
         // TODO update total_staked_tokens in the stake pool config
         unimplemented!()
     }

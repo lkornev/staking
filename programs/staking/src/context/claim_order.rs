@@ -25,7 +25,7 @@ pub struct ClaimReward<'info> {
         ],
         bump,
     )]
-    pub stakeholder: Account<'info, Stakeholder>,
+    pub member_stake: Account<'info, MemberStake>,
     #[account(
         seeds = [
             beneficiary.to_account_info().key.as_ref(),
@@ -37,7 +37,7 @@ pub struct ClaimReward<'info> {
     pub member: Account<'info, Member>,
     #[account(
         // TODO add an error with useful text
-        constraint = vault_staked.owner == stakeholder.key(),
+        constraint = vault_staked.owner == member_stake.key(),
     )]
     pub vault_staked: Box<Account<'info, TokenAccount>>,
     #[account(
