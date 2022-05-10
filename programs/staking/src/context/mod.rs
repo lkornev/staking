@@ -8,3 +8,4 @@ mod new_stake_pool; pub use new_stake_pool::*;
 mod stake; pub use stake::*;
 mod start_unstake; pub use start_unstake::*;
 mod withdraw; pub use withdraw::*;
+mod create_member; pub use create_member::*;

@@ -35,6 +35,7 @@ pub mod staking {
     }
 
     /// Create a new stake pool instance
+    /// There could be two stake-pool instances. One with Reward.Fixed and one with Reward.Unfixed. 
     pub fn new(
         ctx: Context<NewStakePool>,
         reward_type: Reward, // Reward enum
@@ -71,18 +72,11 @@ pub mod staking {
         Ok(())
     }
 
-    /// Transfer tokens from a user's external wallet to the user's internal `vault_free`,
-    /// that belongs to the user, but controlled by the program.
-    /// User can freely deposit and withdraw tokens to/from the `vault_free`.
-    /// The program cannot transfer any staked tokens without the user's signed request.
-    /// 
-    /// Tokens inside `vault_free` don't gain any rewards.
-    /// To start getting rewards user can stake one's tokens
-    /// inside `vault_free` by calling the `stake` method.
-    pub fn deposit(
-        ctx: Context<Deposit>,
+    /// In order to interact with the staking program
+    /// a user has to have the member account.
+    pub fn create_member(
+        ctx: Context<CreateMember>,
         member_bump: u8,
-        amount: u64, // The amount of tokens to deposit
     ) -> Result<()> {
         let member = &mut ctx.accounts.member;
 
@@ -91,21 +85,25 @@ pub mod staking {
         member.vault_pending_unstaking = (*ctx.accounts.vault_pending_unstaking).key();
         member.bump = member_bump;
 
+        Ok(())
+    }
+
+    /// Transfer tokens from a member's external wallet to the member's internal `vault_free`,
+    /// that belongs to the member, but controlled by the program.
+    /// Member can freely deposit and withdraw tokens to/from the `vault_free`.
+    /// The program cannot transfer any staked tokens without the member's owner signed request.
+    /// 
+    /// Tokens inside `vault_free` don't gain any rewards.
+    /// To start getting rewards member can stake one's tokens
+    /// inside `vault_free` by calling the `stake` method.
+    pub fn deposit(
+        ctx: Context<Deposit>,
+        amount: u64, // The amount of tokens to deposit
+    ) -> Result<()> {
         let beneficiary_tokens = ctx.accounts.beneficiary_token_account.amount;
         require!(amount <= beneficiary_tokens, SPError::InsufficientAmountOfTokensToDeposit);
 
-        let token_program = ctx.accounts.token_program.to_account_info();
-        let from = ctx.accounts.beneficiary_token_account.to_account_info();
-        let to = (*ctx.accounts.vault_free).to_account_info();
-        let authority = ctx.accounts.beneficiary.to_account_info();
-
-        token::transfer(
-            CpiContext::new(
-                token_program,
-                token::Transfer { from, to, authority },
-            ), 
-            amount
-        )
+        ctx.accounts.transfer_user_tokens_to_program(amount)
     }
 
     /// Move tokens from the `vault free` to the `stakeholder valut`
@@ -127,6 +125,7 @@ pub mod staking {
         // TODO check the amount is less or equals to the vault_free amount of tokens 
         // and throw an erorr if needed
 
+        // TODO rename stakeholder to MemberStake
         stakeholder.owner = *ctx.accounts.beneficiary.owner;
         stakeholder.vault = to.key();
         stakeholder.staked_at =  u64::try_from(ctx.accounts.clock.unix_timestamp)

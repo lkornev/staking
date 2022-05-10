@@ -1,20 +1,23 @@
 use anchor_lang::prelude::*;
 use crate::account::*;
-use anchor_spl::token::{self, TokenAccount, Token};
+use anchor_spl::token::{TokenAccount, Token};
 
 #[derive(Accounts)]
-pub struct Deposit<'info> {
+pub struct CreateMember<'info> {
     #[account(
         seeds = [Factory::PDA_SEED],
         bump = factory.bump,
     )]
     pub factory: Account<'info, Factory>,
     #[account(
+        init,
+        payer = beneficiary,
+        space = 8 + Member::SPACE,
         seeds = [
             beneficiary.to_account_info().key.as_ref(),
             factory.to_account_info().key.as_ref(),
         ],
-        bump = member.bump,
+        bump,
     )]
     pub member: Account<'info, Member>,
     #[account(
@@ -24,27 +27,14 @@ pub struct Deposit<'info> {
         constraint = vault_free.mint == factory.stake_token_mint,
     )]
     pub vault_free: Box<Account<'info, TokenAccount>>,
+    #[account(
+        // TODO add errors with useful text
+        constraint = vault_pending_unstaking.owner == member.to_account_info().key(), 
+        constraint = vault_pending_unstaking.mint == vault_free.mint,
+    )]
+    pub vault_pending_unstaking: Box<Account<'info, TokenAccount>>,
     #[account(mut)]
     pub beneficiary: Signer<'info>,
-    #[account(mut)]
-    pub beneficiary_token_account: Box<Account<'info, TokenAccount>>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
-}
-
-impl<'info> Deposit<'info> {
-    pub fn transfer_user_tokens_to_program(&self, amount_to_deposit: u64) -> Result<()> {
-        let token_program = self.token_program.to_account_info();
-        let from = self.beneficiary_token_account.to_account_info();
-        let to = (*self.vault_free).to_account_info();
-        let authority = self.beneficiary.to_account_info();
-
-        token::transfer(
-            CpiContext::new(
-                token_program,
-                token::Transfer { from, to, authority },
-            ), 
-            amount_to_deposit
-        )
-    }
 }

@@ -1,4 +1,4 @@
-export const Reward = {
+export const Reward: { [key: string]: RewardType } = {
     /// A stakeholder will receive a fixed amount of reward tokens pro rata one's staked tokens.
     /// E.g. staked tokens: 300, `reward_per_token`: 5 %.
     /// Reward: 15 reward tokens per `reward_period`. (300 * 5 / 100)
@@ -17,3 +17,18 @@ export const Reward = {
         value: { unfixed: {} },
     },
 }
+
+export type RewardType = {
+    index: 0 | 1,
+    value: { [key: string]: {} }
+}
+
+export type RewardFixed = {
+    index: 0,
+    value: { fixed: {} },
+};
+
+export type RewardUnfixed = {
+    index: 1,
+    value: { unfixed: {} },
+};

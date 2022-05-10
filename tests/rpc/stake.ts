@@ -3,27 +3,27 @@ import {
     SystemProgram,
 } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import { Ctx } from "../ctx/ctx";
-import { Reward } from "../types/reward";
+import { StakePool, Member, MemberStake } from "../ctx/ctx";
+import { CtxRPC } from "../types/ctx-rpc";
 
-export async function stakeRPC(ctx: Ctx, rewardType: number) {
+export async function stakeRPC(ctx: CtxRPC, stakePool: StakePool, member: Member, memberStake: MemberStake) {
     await ctx.program.methods.stake(
-        Reward.Fixed.value,
-        ctx.PDAS.stakePoolFixed.bump,
-        ctx.amountToStake
+        stakePool.rewardType.value,
+        stakePool.bump,
+        memberStake.amountToStake
     )
     .accounts({
-        factory: ctx.PDAS.factory.key,
-        stakePool: ctx.PDAS.stakePoolFixed.key,
-        beneficiary: ctx.beneficiary.publicKey,
-        member: ctx.PDAS.memberFixed.key,
-        vaultFree: ctx.vaultFree.publicKey,
-        stakeholder: ctx.PDAS.stakeholderFixed.key,
-        vaultStaked: ctx.vaultStakedFixed.publicKey,
+        factory: ctx.factory,
+        stakePool: stakePool.key,
+        beneficiary: member.beneficiary.publicKey,
+        member: member.key,
+        vaultFree: member.vaultFree.publicKey,
+        stakeholder: memberStake.key,
+        vaultStaked: memberStake.vaultStaked.publicKey,
         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
     })
-    .signers([ctx.beneficiary])
+    .signers([member.beneficiary])
     .rpc();
 }
