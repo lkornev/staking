@@ -2,32 +2,27 @@ import * as anchor from "@project-serum/anchor";
 import {
     SystemProgram,
 } from '@solana/web3.js';
-import { StakePool } from "../ctx/ctx";
-import { CtxRPC } from "../types/ctx-rpc";
+import { Ctx, StakePool } from "../ctx/ctx";
 
-export async function newStakePoolRPC(ctx: CtxRPC, stakePool: StakePool) {
-    await ctx.program.methods.new(
+export async function newStakePoolRPC(ctx: Ctx, stakePool: StakePool) {
+    await ctx.program.methods.newStakePool(
         stakePool.rewardType.value,
-        stakePool.unstakeDelay, // secs
-        stakePool.unstakeForseFeePercent, // %,
-        stakePool.rewardMetadata, // %,
-        stakePool.configHistoryLength,
         stakePool.bump,
+        stakePool.endedAt,
+        stakePool.unstakeDelay, // secs
+        stakePool.unstakeForceFeePercent, // %,
+        stakePool.minOwnerReward,
+        stakePool.rewardMetadata,
+        stakePool.ownerInterestPercent, // %
+        stakePool.rewardPeriod,
     )
     .accounts({
-        factory: ctx.factory,
+        factory: ctx.PDAS.factory.key,
         stakePool: stakePool.key,
-        configHistory: stakePool.configHistoryKeypair.publicKey,
         owner: ctx.owner.publicKey,
         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
         systemProgram: SystemProgram.programId,
     })
-    .signers([ctx.owner, stakePool.configHistoryKeypair])
-    .preInstructions([
-        await ctx.program.account.configHistory.createInstruction(
-            stakePool.configHistoryKeypair, 
-            stakePool.configHistoryLength * stakePool.configHistoryElSize + stakePool.configHistoryMetadata
-        ),
-    ])
+    .signers([ctx.owner])
     .rpc();
 }

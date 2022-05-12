@@ -9,17 +9,12 @@ import {
 import { Ctx } from "../ctx/ctx";
 
 export async function initializeRPC(ctx: Ctx) {
-    await ctx.program.methods.initialize(
-        ctx.owner.publicKey,
-        ctx.ownerInterest,
-        ctx.configChangeDelay,
-        ctx.rewardPeriod,
-    )
+    await ctx.program.methods.initialize(ctx.owner.publicKey)
     .accounts({
         factory: ctx.PDAS.factory.key,
-        rewardTokenMint: ctx.rewardTokenMint,
-        stakeTokenMint: ctx.stakeTokenMint,
-        vaultReward: ctx.vaultReward,
+        rewardTokenMint: ctx.PDAS.factory.rewardTokenMint,
+        stakeTokenMint: ctx.PDAS.factory.stakeTokenMint,
+        vaultReward: ctx.PDAS.factory.vaultReward,
         initializer: ctx.owner.publicKey,
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,

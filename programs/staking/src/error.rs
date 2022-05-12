@@ -10,6 +10,8 @@ pub enum SPError {
     StakePoolPDAInvalid,
     #[msg("Not enough tokens for the deposition. Please add more tokens to your account.")]
     InsufficientAmountOfTokensToDeposit,
-    #[msg("Only the owner of the pool factory is allowed to create new pools")]
-    NewPoolOwnerMistmatch,
+    #[msg("No reward available")]
+    NoRewardAvailable,
+    #[msg("Not enough reward tokens in the staking factory")]
+    InsufficientAmountOfTokensToClaim,
 }

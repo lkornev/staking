@@ -1,20 +1,13 @@
 import { 
     PublicKey, 
-    SystemProgram, 
     LAMPORTS_PER_SOL, 
     Keypair,
     Connection,
     Signer,
 } from '@solana/web3.js';
-import { 
-    createMint,
-    TOKEN_PROGRAM_ID, 
+import {
     getOrCreateAssociatedTokenAccount,
     Account as TokenAccount,
-    mintTo,
-    getAccount,
-    createApproveInstruction,
-    NATIVE_MINT,
 } from '@solana/spl-token';
 
 export async function createUserWithLamports(

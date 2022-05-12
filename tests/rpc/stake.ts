@@ -3,17 +3,16 @@ import {
     SystemProgram,
 } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import { StakePool, Member, MemberStake } from "../ctx/ctx";
-import { CtxRPC } from "../types/ctx-rpc";
+import { Ctx, StakePool, Member, MemberStake } from "../ctx/ctx";
 
-export async function stakeRPC(ctx: CtxRPC, stakePool: StakePool, member: Member, memberStake: MemberStake) {
+export async function stakeRPC(ctx: Ctx, stakePool: StakePool, member: Member, memberStake: MemberStake) {
     await ctx.program.methods.stake(
         stakePool.rewardType.value,
         stakePool.bump,
         memberStake.amountToStake
     )
     .accounts({
-        factory: ctx.factory,
+        factory: ctx.PDAS.factory.key,
         stakePool: stakePool.key,
         beneficiary: member.beneficiary.publicKey,
         member: member.key,

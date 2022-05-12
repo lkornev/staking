@@ -11,20 +11,10 @@ pub mod staking {
     use super::*;
 
     /// Create the stake factory.
-    pub fn initialize(
-        ctx: Context<Initialize>,
-        owner: Pubkey,
-        owner_interest: u8,
-        config_change_delay: u128,
-        reward_period: u64,
-    ) -> Result<()> {
+    pub fn initialize(ctx: Context<Initialize>, owner: Pubkey) -> Result<()> {
         let factory = &mut ctx.accounts.factory;
-
         factory.bump = *ctx.bumps.get(Factory::PDA_KEY).unwrap();
         factory.owner = owner;
-        factory.owner_interest = owner_interest;
-        factory.config_change_delay = config_change_delay;
-        factory.reward_period = reward_period;
         factory.reward_token_mint = ctx.accounts.reward_token_mint.key();
         factory.stake_token_mint = ctx.accounts.stake_token_mint.key();
         factory.vault_reward = ctx.accounts.vault_reward.key();
@@ -33,44 +23,36 @@ pub mod staking {
     }
 
     /// Create a new stake pool instance
-    /// There could be two stake-pool instances. One with Reward.Fixed and one with Reward.Unfixed. 
-    pub fn new(
+    pub fn new_stake_pool(
         ctx: Context<NewStakePool>,
-        reward_type: Reward, // Reward enum
-        unstake_delay: u64,
-        unstake_forse_fee_percent: u8,
-        reward_metadata: u128, // Could be any data depending on the `reward_type`
-        config_history_length: u32,
+        reward: Reward,
         bump: u8,
+        ends_at: u64,
+        unstake_delay: u64,
+        unstake_force_fee_percent: u8,
+        min_owner_reward: u32,
+        reward_metadata: u128, // Could be any data depending on the `Reward`
+        owner_interest_percent: u8,
+        reward_period: u64,
     ) -> Result<()> {
-        let stake_pool_config = StakePoolConfig {
-            started_at: ctx.accounts.clock.unix_timestamp,
-            ended_at: None,
-            total_staked_tokens: 0,
-            unstake_delay,
-            unstake_forse_fee_percent,
-            reward_type,
-            reward_metadata,
-        };
-
+        // TODO check owner_interest 1 - 100%
         let stake_pool = &mut ctx.accounts.stake_pool;
-
+        stake_pool.started_at = ctx.accounts.clock.unix_timestamp as u64;
+        stake_pool.ends_at = ends_at;
+        stake_pool.total_staked_tokens = 0;
+        stake_pool.unstake_delay = unstake_delay;
+        stake_pool.unstake_force_fee_percent = unstake_force_fee_percent;
+        stake_pool.min_owner_reward = min_owner_reward;
+        stake_pool.reward_type = reward;
+        stake_pool.reward_metadata = reward_metadata;
         stake_pool.bump = bump;
-        stake_pool.config_history = *ctx.accounts.config_history.to_account_info().key;
-
-        let config_history = &mut ctx.accounts.config_history;
-
-        config_history
-            .history
-            .resize(config_history_length as usize, None);
-
-        config_history.append(stake_pool_config);
+        stake_pool.owner_interest_percent = owner_interest_percent;
+        stake_pool.reward_period = reward_period;
 
         Ok(())
     }
 
-    /// In order to interact with the staking program
-    /// a user has to have the member account.
+    /// To interact with the program a user has to have a member account.
     pub fn create_member(
         ctx: Context<CreateMember>,
         member_bump: u8,
@@ -103,8 +85,8 @@ pub mod staking {
         ctx.accounts.transfer_user_tokens_to_program(amount)
     }
 
-    /// Move tokens from the `vault free` to the `MemberStake valut`
-    /// Tokens inside `MemberStake valut` allow to get rewards pro rata staked amount.
+    /// Move tokens from the `vault free` to the `MemberStake vault`
+    /// Tokens inside `MemberStake vault` allow to get rewards pro rata staked amount.
     /// Member can stake coins from one's `vault free` to any stake.
     /// Member must claim the rewards before staking more tokens to the same pool. (TODO Check)
     #[allow(unused_variables)] // but it's not
@@ -115,58 +97,42 @@ pub mod staking {
         amount: u64, // The amount of the tokens to stake
     ) -> Result<()> {
         // TODO check the amount is less or equals to the vault_free amount of tokens 
-        // and throw an erorr if needed
+        // and throw an error if needed
 
         let member_stake = &mut ctx.accounts.member_stake;
-        member_stake.owner = *ctx.accounts.beneficiary.owner;
-        member_stake.vault = ctx.accounts.vault_staked.key();
-        member_stake.staked_at = ctx.accounts.clock.unix_timestamp;
+        member_stake.beneficiary = ctx.accounts.beneficiary.key();
+        member_stake.vault_staked = ctx.accounts.vault_staked.key();
+        member_stake.staked_at = ctx.accounts.clock.unix_timestamp as u64;
         member_stake.bump = member_stake_bump;
         member_stake.stake_pool = ctx.accounts.stake_pool.key();
 
         ctx.accounts.transfer_tokens_to_staked_vault(amount)?;
 
-        // TODO update total_staked_tokens in the stake pool config
+        ctx.accounts.stake_pool.total_staked_tokens += amount as u128;
 
         Ok(())
     }
 
     /// Deposit a reward for stakers.
     /// The reward is distributed on demand pro rata staked tokens.
-    pub fn deposit_reward(
-        ctx: Context<DepositReward>,
-        amount: u64,
-    ) -> Result<()> {
+    pub fn deposit_reward(ctx: Context<DepositReward>, amount: u64) -> Result<()> {
         // TODO check the amount is less or equals to the amount of tokens inside vault_owner  
-        // and throw an erorr if needed
+        // and throw an error if needed
 
         ctx.accounts.transfer_tokens_to_reward_vault(amount)
     }
 
     /// Claim the reward for staked tokens
-    pub fn claim_reward(
-        ctx: Context<ClaimReward>,
-        reward_type: Reward,
-    ) -> Result<()> {
-        let factory = &ctx.accounts.factory;
-        let config_history = &ctx.accounts.config_history;
-        let vault_staked = &ctx.accounts.vault_staked;
-        let clock = &ctx.accounts.clock;
+    // TODO remove reward from params and accounts
+    pub fn claim_reward(ctx: Context<ClaimReward>, reward: Reward) -> Result<()> {
+        let (reward_tokens_to_transfer, reward_payed_for) = ctx.accounts.calculate_reward_tokens()?;
 
-        let (_reward_tokens_amoun, _config_cursor) = reward_type
-            .calculate(
-                factory.reward_period, 
-                vault_staked.amount,
-                clock.unix_timestamp,
-                &config_history,
-                &ctx.accounts.member_stake,
-            );
+        let reward_tokens_available = ctx.accounts.vault_reward.amount;
+        require!(reward_tokens_to_transfer <= reward_tokens_available, SPError::InsufficientAmountOfTokensToClaim);
 
-        // TODO if reward_tokens_amount = 0 return an error
-        // TODO set config_cursor in the MemberStake
-        // TODO send reward tokens from vault_reward to the beneficiary's external_vault
+        ctx.accounts.transfer_reward_tokens(reward_tokens_to_transfer)?;
+        ctx.accounts.member_stake.reward_payed_for = reward_payed_for;
 
-        // TODO Transfer the factory owner one's owner_interest in the reward tokens.
         Ok(())
     }
 
@@ -178,17 +144,17 @@ pub mod staking {
         _ctx: Context<StartUnstake>,
     ) -> Result<()> {
         // TODO remove MemberStake account and return lamports to the stake's owner
-        // TODO update total_staked_tokens in the stake pool config
+        // TODO update total_staked_tokens in the stake pool
         unimplemented!()
     }
 
     /// Move tokens from `pending unstaking vault` to `free vault`.
     pub fn finish_unstake(
         _ctx: Context<FinishUnstake>,
-        // Unstake immediately without waiting for `unstake_delay` by paying the `unstake_forse_fee`
-        _forse: bool,
+        // Unstake immediately without waiting for `unstake_delay` by paying the `unstake_force_fee`
+        _force: bool,
     ) -> Result<()> {
-        // TODO if unstake_forse_fee === 0 or unstake_delay passed, than ignore forse flag
+        // TODO if unstake_force_fee === 0 or unstake_delay passed, than ignore force flag
         unimplemented!()
     }
 
@@ -204,22 +170,8 @@ pub mod staking {
         _ctx: Context<Withdraw>,
     ) -> Result<()> {
         // TODO if all user accounts will be empty after withdraw,
-        // than destroy token accounts and return rent-extempt sol to the user
+        // than destroy token accounts and return rent-exempt sol to the user
         unimplemented!()
     }
 
-    /// Change the config of the stake pool. 
-    /// Changing the config means pushing the new config account in the ConfigHistory.
-    /// 
-    /// The configuration of the stake program can be changed on the fly,
-    /// therefore, before changing the configuration, 
-    /// the owner needs to give the pool member the promised reward
-    /// for the time they staked their tokens using the current configuration.
-    pub fn change_config(
-        _ctx: Context<ChangeConfig>,
-    ) -> Result<()> {
-        // TODO withdraw the reward tokens from the owner's account,
-        // add the new config to the config history in a single transaction.
-        unimplemented!()
-    }
 }

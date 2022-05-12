@@ -9,11 +9,11 @@ import {
 } from '@solana/web3.js';
 import {
     createMint,
-    getAssociatedTokenAddress,
     getOrCreateAssociatedTokenAccount,
     Account as TokenAccount,
     createAccount as createTokenAccount,
     mintTo,
+    getAssociatedTokenAddress,
 } from '@solana/spl-token';
 import { createUserWithLamports } from "../helpers/general";
 import { Reward, RewardType } from "../types/reward";
@@ -22,21 +22,36 @@ import { Reward, RewardType } from "../types/reward";
 export interface Ctx {
     connection: Connection,
     program: Program<Staking>,
-    owner: Signer,
-    ownerInterest: number, // %
-    configChangeDelay: BN, // secs
-    rewardPeriod: BN, // secs
-    rewardTokenMint: PublicKey,
-    stakeTokenMint: PublicKey,
-    vaultReward: PublicKey,
     PDAS: {
-        factory: CtxPDA,
+        factory: Factory,
         stakePoolFixed: StakePool,
         member: Member,
         memberStakeFixed: MemberStake,
     },
-    rewardTokensAmount: number,
-    ownerTokenAccount: TokenAccount,
+    owner: Owner,
+}
+
+export async function createCtx(): Promise<Ctx> {
+    const program = anchor.workspace.Staking as Program<Staking>;
+    const connection = new Connection("http://localhost:8899", 'recent');
+
+    const owner = await createOwner({program, connection});
+    const factory = await createFactory({program, connection, owner});
+    const member = await createMember({program, connection, factory});
+    const stakePoolFixed = await createStakePool({program, rewardType: Reward.Fixed, rewardMetadata: new BN(10)});
+    const memberStakeFixed = await createMemberStake({ connection, program, factory, member, stakePool: stakePoolFixed });
+
+    return {
+        connection,
+        program,
+        PDAS: {
+            factory,
+            stakePoolFixed,
+            member,
+            memberStakeFixed,
+        },
+        owner,
+    }
 }
 
 export interface CtxPDA {
@@ -44,95 +59,88 @@ export interface CtxPDA {
     bump: number,
 }
 
-export async function createCtx(): Promise<Ctx> {
-    const connection = new Connection("http://localhost:8899", 'recent');
-    const program = anchor.workspace.Staking as Program<Staking>;
-    const owner = await createUserWithLamports(connection, 10);
-    const [factoryPDA, factoryBump] = await PublicKey.findProgramAddress(
-        [anchor.utils.bytes.utf8.encode("factory")],
-        program.programId
-    );
-    const rewardTokenMint = await createMint(connection, owner, owner.publicKey, owner.publicKey, 6);
-    const stakeTokenMint = await createMint(connection, owner, owner.publicKey, owner.publicKey, 9);
-    const vaultReward = await getAssociatedTokenAddress(rewardTokenMint, factoryPDA, true);
+export interface Owner extends Signer {
+    rewardTokenVault: PublicKey,
+    feeRewardVault: PublicKey,
+    rewardTokenMint: PublicKey,
+    initialRewardTokensAmount: number,
+}
 
-    const stakePoolFixed = await createStakePool({
-        program,
-        rewardType: Reward.Fixed,
-        rewardMetadata: new BN(10),
-    });
-    
-    const member: Member = await createMember({
-        connection,
-        program,
-        owner,
-        stakeTokenMint,
-        PDAS: {
-            factory: { key: factoryPDA, bump: factoryBump },
-        },
-    });
+export interface OwnerCtx {
+    program: Program<Staking>,
+    connection: Connection,
+}
 
-    const memberStakeFixed: MemberStake = await createMemberStake({
-        connection,
-        program,
-        owner,
+export async function createOwner(ctx: OwnerCtx): Promise<Owner> {
+    const signer = await createUserWithLamports(ctx.connection, 10);
+    const rewardTokenMint = await createMint(ctx.connection, signer, signer.publicKey, signer.publicKey, 6);
+    const feeRewardTokenAccount = await getOrCreateAssociatedTokenAccount(ctx.connection, signer, rewardTokenMint, signer.publicKey);
+    const initialRewardTokensAmount = 100000000;
+    const rewardTokenAccount = await getOrCreateAssociatedTokenAccount(
+        ctx.connection,
+        signer, // Payer
         rewardTokenMint,
-        stakeTokenMint,
-        amountToStake: member.amountToDeposit,
-        PDAS: {
-            factory: { key: factoryPDA, bump: factoryBump },
-            stakePool: stakePoolFixed,
-            member,
-        },
-    });
-
-    const rewardTokensAmount = 100000000;
-    const ownerTokenAccount = await getOrCreateAssociatedTokenAccount(
-        connection,
-        owner, // Payer
-        rewardTokenMint,
-        owner.publicKey, // Owner
+        signer.publicKey, // Owner
     );
-
     await mintTo(
-        connection,
-        owner,  // Payer
+        ctx.connection,
+        signer, // Payer
         rewardTokenMint,
-        ownerTokenAccount.address, // mint to
-        owner, // Authority
-        rewardTokensAmount,
+        rewardTokenAccount.address, // mint to
+        signer.publicKey, // Authority
+        initialRewardTokensAmount,
     );
 
-    return {
-        connection,
-        program,
-        PDAS: {
-            factory: { key: factoryPDA, bump: factoryBump },
-            stakePoolFixed,
-            member,
-            memberStakeFixed,
-        },
-        owner,
-        ownerInterest: 1, // %
-        configChangeDelay: new BN(20), // secs
-        rewardPeriod: new BN(30), // secs
+    return { 
+        publicKey: signer.publicKey,
+        secretKey: signer.secretKey,
+        rewardTokenVault: rewardTokenAccount.address,
+        feeRewardVault: feeRewardTokenAccount.address,
         rewardTokenMint,
-        stakeTokenMint,
-        vaultReward,
-        rewardTokensAmount,
-        ownerTokenAccount,
-    }
+        initialRewardTokensAmount,
+    };
+}
+
+export interface Factory extends CtxPDA {
+    vaultReward: PublicKey,
+    rewardTokenMint: PublicKey,
+    stakeTokenMint: PublicKey,
+    owner: Owner,
+}
+
+export interface FactoryCtx {
+    program: Program<Staking>,
+    connection: Connection,
+    owner: Owner,
+}
+
+export async function createFactory(ctx: FactoryCtx): Promise<Factory> {
+    const [key, bump] = await PublicKey.findProgramAddress(
+        [anchor.utils.bytes.utf8.encode("factory")],
+        ctx.program.programId
+    );
+    const stakeTokenMint = await createMint(ctx.connection, ctx.owner, ctx.owner.publicKey, ctx.owner.publicKey, 9);
+    const vaultReward = await getAssociatedTokenAddress(ctx.owner.rewardTokenMint, key, true);
+
+    return { 
+        key, 
+        bump,
+        vaultReward, 
+        rewardTokenMint: ctx.owner.rewardTokenMint, 
+        stakeTokenMint, 
+        owner: ctx.owner 
+    };
 }
 
 export interface StakePool extends CtxPDA {
+    endedAt: BN, // secs
+    rewardPeriod: BN, // secs
+    ownerInterestPercent: number, // %
     rewardType: RewardType,
     unstakeDelay: BN, // secs
-    unstakeForseFeePercent: number, // %,
+    unstakeForceFeePercent: number, // %,
+    minOwnerReward: number,
     rewardMetadata: BN,
-    configHistoryKeypair: Keypair,
-    configHistoryLength: number,
-    configHistoryElSize: number,
-    configHistoryMetadata: number,
 }
 
 export interface StakePoolCtx {
@@ -140,10 +148,11 @@ export interface StakePoolCtx {
     rewardType: RewardType,
     rewardMetadata: BN,
     unstakeDelay?: BN, // secs
-    unstakeForseFeePercent?: number, // %,
-    configHistoryLength?: number,
-    configHistoryElSize?: number,
-    configHistoryMetadata?: number,
+    unstakeForceFeePercent?: number, // %,
+    endedAt?: BN,
+    ownerInterestPercent?: number, // %
+    rewardPeriod?: BN, // secs
+    minOwnerReward?: number,
 }
 
 export async function createStakePool(ctx: StakePoolCtx): Promise<StakePool> {
@@ -152,17 +161,19 @@ export async function createStakePool(ctx: StakePoolCtx): Promise<StakePool> {
         ctx.program.programId
     );
 
+    let rewardPeriod = ctx.rewardPeriod || new BN(2);
+
     return {
         key: stakePoolPDA,
         bump: stakePoolBump,
         rewardType: ctx.rewardType,
         rewardMetadata: ctx.rewardMetadata,
+        endedAt: ctx.endedAt || new BN(Math.floor(Date.now() / 1000)).add(rewardPeriod.mul(new BN(50))),
+        ownerInterestPercent: ctx.ownerInterestPercent || 1, // %
+        rewardPeriod: rewardPeriod, // secs
         unstakeDelay: ctx.unstakeDelay || new BN(40), // secs
-        unstakeForseFeePercent: ctx.unstakeForseFeePercent || 50, // %,
-        configHistoryKeypair: anchor.web3.Keypair.generate(),
-        configHistoryLength: ctx.configHistoryLength || 10,
-        configHistoryElSize: ctx.configHistoryElSize || 32,
-        configHistoryMetadata: ctx.configHistoryMetadata || 4 + 4 + 8 * 3,
+        unstakeForceFeePercent: ctx.unstakeForceFeePercent || 50, // %,
+        minOwnerReward: ctx.minOwnerReward || 1, // tokens
     }
 }
 
@@ -171,61 +182,64 @@ export interface Member extends CtxPDA {
     beneficiaryTokenAccount: TokenAccount,
     vaultFree: Keypair,
     vaultPendingUnstaking: Keypair,
-    stakeTokenAmount: number,
+    stakeTokenAmount: BN,
     amountToDeposit: BN,
+    beneficiaryRewardVault: TokenAccount,
 }
 
 export interface MemberCtx {
     connection: Connection,
     program: Program<Staking>,
-    owner: Signer,
-    stakeTokenMint: PublicKey,
-    PDAS: {
-        factory: CtxPDA,
-    },
+    factory: Factory,
 }
 
-export async function createMember(memberCtx: MemberCtx): Promise<Member> {
-    const stakeTokenAmount = 1000;
-    const amountToDeposit = new BN(stakeTokenAmount);
+export async function createMember(ctx: MemberCtx): Promise<Member> {
+    const stakeTokenAmount = new BN(1000);
+    const amountToDeposit = stakeTokenAmount;
 
-    const beneficiary = await createUserWithLamports(memberCtx.connection, 1);
+    const beneficiary = await createUserWithLamports(ctx.connection, 10);
     const beneficiaryTokenAccount = await getOrCreateAssociatedTokenAccount(
-        memberCtx.connection,
+        ctx.connection,
         beneficiary, // Payer
-        memberCtx.stakeTokenMint,
+        ctx.factory.stakeTokenMint,
         beneficiary.publicKey, // Owner
     );
     await mintTo(
-        memberCtx.connection,
-        memberCtx.owner,  // Payer
-        memberCtx.stakeTokenMint,
+        ctx.connection,
+        ctx.factory.owner,  // Payer
+        ctx.factory.stakeTokenMint,
         beneficiaryTokenAccount.address, // mint to
-        memberCtx.owner, // Authority
-        stakeTokenAmount,
+        ctx.factory.owner, // Authority
+        Number(stakeTokenAmount),
     );
     const vaultFree = anchor.web3.Keypair.generate();
     const vaultPendingUnstaking = anchor.web3.Keypair.generate();
     const [memberPDA, memberBump] = await PublicKey.findProgramAddress(
         [
             beneficiary.publicKey.toBuffer(),
-            memberCtx.PDAS.factory.key.toBuffer(),
+            ctx.factory.key.toBuffer(),
         ],
-        memberCtx.program.programId
+        ctx.program.programId
     );
     await createTokenAccount(
-        memberCtx.connection,
+        ctx.connection,
         beneficiary, // Payer
-        memberCtx.stakeTokenMint,
+        ctx.factory.stakeTokenMint,
         memberPDA, // Owner
         vaultFree, // Keypair
     );
     await createTokenAccount(
-        memberCtx.connection,
+        ctx.connection,
         beneficiary, // Payer
-        memberCtx.stakeTokenMint,
+        ctx.factory.stakeTokenMint,
         memberPDA, // Owner
         vaultPendingUnstaking, // Keypair
+    );
+    const beneficiaryRewardVault = await getOrCreateAssociatedTokenAccount(
+        ctx.connection,
+        beneficiary,
+        ctx.factory.rewardTokenMint,
+        beneficiary.publicKey
     );
 
     return {
@@ -237,12 +251,13 @@ export async function createMember(memberCtx: MemberCtx): Promise<Member> {
         vaultPendingUnstaking,
         stakeTokenAmount,
         amountToDeposit,
+        beneficiaryRewardVault,
     }
 }
 
 export interface MemberStake extends CtxPDA  {
     member: Member,
-    stakePool: CtxPDA,
+    stakePool: StakePool,
     amountToStake: BN,
     vaultStaked: Keypair,
 }
@@ -250,30 +265,24 @@ export interface MemberStake extends CtxPDA  {
 export interface MemberStakeCtx {
     connection: Connection,
     program: Program<Staking>,
-    owner: Signer,
-    rewardTokenMint: PublicKey,
-    stakeTokenMint: PublicKey,
-    amountToStake: BN,
-    PDAS: {
-        factory: CtxPDA,
-        stakePool: CtxPDA,
-        member: Member,
-    },
+    factory: Factory,
+    stakePool: StakePool,
+    member: Member,
 }
 
-export async function createMemberStake(ctx: MemberStakeCtx): Promise<MemberStake> {
+export async function createMemberStake(ctx: MemberStakeCtx, amountToStake?: BN): Promise<MemberStake> {
     const [memberStake, memberStakeBump] = await PublicKey.findProgramAddress(
         [
-            ctx.PDAS.member.key.toBuffer(),
-            ctx.PDAS.stakePool.key.toBuffer(),
+            ctx.member.key.toBuffer(),
+            ctx.stakePool.key.toBuffer(),
         ],
         ctx.program.programId
     );
     const vaultStaked = anchor.web3.Keypair.generate();
     await createTokenAccount(
         ctx.connection,
-        ctx.PDAS.member.beneficiary, // Payer
-        ctx.stakeTokenMint,
+        ctx.member.beneficiary, // Payer
+        ctx.factory.stakeTokenMint,
         memberStake, // Owner
         vaultStaked, // Keypair
     );
@@ -281,9 +290,9 @@ export async function createMemberStake(ctx: MemberStakeCtx): Promise<MemberStak
     return {
         key: memberStake,
         bump: memberStakeBump,
-        member: ctx.PDAS.member,
-        stakePool: ctx.PDAS.stakePool,
-        amountToStake: ctx.amountToStake,
+        member: ctx.member,
+        stakePool: ctx.stakePool,
+        amountToStake: amountToStake || ctx.member.amountToDeposit, // By default member stakes deposited all tokens
         vaultStaked: vaultStaked,
     }
 }

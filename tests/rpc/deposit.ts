@@ -1,14 +1,13 @@
 import { SystemProgram } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import { Member } from "../ctx/ctx";
-import { CtxRPC } from '../types/ctx-rpc';
+import { Ctx, Member } from "../ctx/ctx";
 
-export async function depositRPC(ctx: CtxRPC, member: Member) {
+export async function depositRPC(ctx: Ctx, member: Member) {
     await ctx.program.methods.deposit(
         member.amountToDeposit
     )
     .accounts({
-        factory: ctx.factory,
+        factory: ctx.PDAS.factory.key,
         beneficiary: member.beneficiary.publicKey,
         beneficiaryTokenAccount: member.beneficiaryTokenAccount.address,
         member: member.key,

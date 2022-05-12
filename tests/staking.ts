@@ -6,28 +6,28 @@ import { depositRPC } from './rpc/deposit';
 import { stakeRPC } from './rpc/stake';
 import { depositRewardRPC } from "./rpc/deposit-reward";
 import { createMemberRPC } from "./rpc/create-member";
+import { claimRewardRPC } from "./rpc/claim-reward";
 import { Check } from "./check/check";
-import { CtxRPC, sliceCtxRpc } from "./types/ctx-rpc";
+import { sleepTill } from "./helpers/general";
+import { getAccount } from "@solana/spl-token";
 
 describe("staking", () => {
     anchor.setProvider(anchor.AnchorProvider.env());
     let ctx: Ctx;
-    let ctxRPC: CtxRPC;
 
     it("Initializes factory!", async () => {
         ctx = await createCtx();
-        ctxRPC = sliceCtxRpc(ctx);
         await initializeRPC(ctx);
         await Check.factory(ctx);        
     });
 
     it("Creates new staking pool instance with fixed rewards", async () => {
-        await newStakePoolRPC(ctxRPC, ctx.PDAS.stakePoolFixed);
+        await newStakePoolRPC(ctx, ctx.PDAS.stakePoolFixed);
         await Check.newStakePool(ctx, ctx.PDAS.stakePoolFixed);
     });
 
     it("Creates member", async () => {
-        await createMemberRPC(ctxRPC, ctx.PDAS.member);
+        await createMemberRPC(ctx, ctx.PDAS.member);
         await Check.newMember(ctx, ctx.PDAS.member);
     });
 
@@ -41,5 +41,13 @@ describe("staking", () => {
 
     it("Deposits tokens reward", async () => {
         await Check.depositReward(ctx, depositRewardRPC, { rewardAmountBefore: 0 });
+    });
+
+    it("Claim reward", async () => {
+        let stakedAt = (await ctx.program.account.memberStake.fetch(ctx.PDAS.memberStakeFixed.key)).stakedAt;
+
+        // Wait one reward period + extra sec, just in case.
+        sleepTill(((Number(stakedAt.add(ctx.PDAS.stakePoolFixed.rewardPeriod)) + 1000) * 1000));
+        await Check.claimReward(ctx, ctx.PDAS.stakePoolFixed, ctx.PDAS.member, ctx.PDAS.memberStakeFixed, claimRewardRPC);
     });
 });

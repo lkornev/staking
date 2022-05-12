@@ -12,6 +12,7 @@ pub struct Stake<'info> {
     )]
     pub factory: Account<'info, Factory>,
     #[account(
+        mut,
         seeds = [&[reward as u8]],
         bump = stake_pool.bump,
     )]
@@ -24,6 +25,7 @@ pub struct Stake<'info> {
             factory.to_account_info().key.as_ref(),
         ],
         bump = member.bump,
+        has_one = beneficiary,
     )]
     pub member: Account<'info, Member>,
     #[account(

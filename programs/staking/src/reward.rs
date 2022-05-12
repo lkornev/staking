@@ -1,5 +1,5 @@
-use crate::account::{ConfigHistory, MemberStake};
 use anchor_lang::prelude::*;
+use crate::error::SPError;
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone, Copy, PartialOrd, Ord)]
 pub enum Reward {
@@ -21,78 +21,34 @@ impl Reward {
     /// (reward tokens amount, config index)
     pub fn calculate<'info>(
         &self,
-        reward_period: u64,
+        current_time: u64,
+        program_ends_at: u64,
+        staked_at: u64,
         staked_by_user: u64,
-        current_timestamp: i64,
-        config_history: &ConfigHistory, 
-        member_stake: &MemberStake,
-    ) -> (u64, u32) {
+        reward_period: u64,
+        reward_metadata: u128,
+        _total_staked: u128,
+    ) -> Result<(u64, u64)> {
+        if staked_by_user == 0 || current_time < staked_at.checked_add(reward_period).unwrap() {
+            return err!(SPError::NoRewardAvailable);
+        }
+
         match self {
             Reward::Fixed => {
-                // Config cursor is an index of the active config in the config history 
-                // that member_stake account will use to retrieve actual coefficients
-                let mut config_cursor = member_stake.config_cursor;
-                let mut reward_coeff: f64 = 0.0;
+                let last_reward_time = if program_ends_at > current_time { current_time } else { program_ends_at };
+                let total_reward_time_passed = last_reward_time.checked_sub(staked_at).unwrap();
+                let full_reward_periods_amount = total_reward_time_passed.checked_div(reward_period).unwrap();
+                let full_reward_periods_end_at: u64 = full_reward_periods_amount.checked_mul(reward_period).unwrap()
+                    .checked_add(staked_at).unwrap();
 
-                // If the member_stake's config_cursor is less then the tail, then the ring buffer has
-                // overwritten those entries, so jump to the tail.
-                let tail = config_history.tail();
-                if config_cursor < tail {
-                    config_cursor = tail;
-                }
+                let reward_rate = reward_metadata as u64; // %
+                let reward_amount: u64 = staked_by_user
+                    .checked_mul(100).unwrap()
+                    .checked_div(reward_rate).unwrap()
+                    .checked_div(100).unwrap()
+                    .checked_mul(full_reward_periods_amount).unwrap();
 
-                let current_timestamp = current_timestamp;
-
-                // The unix time when the last full reward period ends
-                let last_full_period_ends_at: i64 = current_timestamp - 
-                    ((current_timestamp - member_stake.staked_at) % reward_period as i64);
-
-                let mut current_period_ends_at: i64 = member_stake.staked_at + reward_period as i64;
-                let mut processing_time_at = member_stake.staked_at;
- 
-                while config_cursor < config_history.head() {
-                    if processing_time_at >= last_full_period_ends_at {
-                        break;
-                    }
-
-                    let config = config_history.get(config_cursor)
-                        .expect("Config cursor, tail and head indexes are correct");
-
-                    // How much of the reward period this config was active
-                    let period_part: f64 = if let Some(config_ended_at) = config.ended_at {
-                        if config_ended_at >= current_period_ends_at {
-                            // The config lasted till the end of the period
-                            let res = (current_period_ends_at - processing_time_at) as f64 / reward_period as f64;
-                            processing_time_at = current_period_ends_at;
-                            current_period_ends_at += reward_period as i64;
-                            config_cursor += 1; // Yes, this line differs this code with the simmilar code below
-
-                            res
-                        } else {
-                            // The config ends before current period
-                            let res = (config_ended_at - processing_time_at) as f64 / reward_period as f64;
-                            processing_time_at = config_ended_at;
-                            config_cursor += 1;
-
-                           res
-                        }
-                    } else {
-                        // The config is not ended so it lasted the whole reward period
-                        let res = (current_period_ends_at - processing_time_at) as f64 / reward_period as f64;
-                        processing_time_at = current_period_ends_at;
-                        current_period_ends_at += reward_period as i64;
-                        
-                        res
-                    };
-
-                    let reward_rate: f64 = (config.reward_metadata as f64) / 100.0;
-
-                    reward_coeff += reward_rate * period_part;
-                }
-
-                let reward_tokens_amount = (staked_by_user as f64 * reward_coeff).floor() as u64;
-
-                return (reward_tokens_amount, config_cursor);
+                Ok((reward_amount, full_reward_periods_end_at))
             },
             Reward::Unfixed => {
                 unimplemented!();
@@ -104,174 +60,65 @@ impl Reward {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::reward::Reward;
-    use anchor_lang::prelude::{Pubkey};
-    use crate::account::{StakePoolConfig};
 
     #[test]
-    fn one_fixed_config() {
+    fn fixed_config_one_reward_period() {
+        let staked_at: u64 = 1652378565;
+        let program_ends_at:u64 = 1652378663;
         let reward = Reward::Fixed;
-        let config_history_length: usize = 10;
-        let staked_at = 1650106095;
+        let reward_rate: u128 =  10; // % reward_metadata
+        let reward_period: u64 = 2; // secs
+        let staked_by_user: u64 = 1000; // tokens
+        let current_timestamp: u64 = 1652378567; // A little bit more than one reward period
+        let total_staked: u128 = 100000000;
 
-        let reward_period = 500; // secs
-        let staked_by_user = 100; // tokens
-        let current_timestamp: i64 = staked_at + 1100; // Little bit more than two reward periods
-
-        let mut config_history = ConfigHistory {
-            head: 0,
-            tail: 0,
-            history: vec![None; config_history_length],
-        };
-
-        let config = StakePoolConfig::new_mock(
-            staked_at - 1000, // started some time before the stake happend
-            None, // Not ended
-            Reward::Fixed,
-            10, // % reward rate
-        );
-
-        config_history.append(config);
-
-        assert_eq!(config_history.head(), 1);
-        assert_eq!(config_history.tail(), 0);
-
-        let member_stake = MemberStake::new_mock(staked_at, 0);
-
-        let (reward, cursor) = reward
+        let (reward_amount, reward_payed_for) = reward
             .calculate(
-                reward_period, 
-                staked_by_user, 
                 current_timestamp,
-                &config_history, 
-                &member_stake,
-            );
-
-        assert_eq!(reward, 20);
-        assert_eq!(cursor, 0);
-    }
-
-    #[test]
-    fn two_fixed_configs() {
-        let reward = Reward::Fixed;
-        let config_history_length: usize = 10;
-        let staked_at: i64 = 1650106095;
-
-        let reward_period = 500; // secs
-        let staked_by_user = 100; // tokens
-        let current_timestamp = staked_at + 1100; // A little bit more than two reward periods
-
-        let mut config_history = ConfigHistory {
-            head: 0,
-            tail: 0,
-            history: vec![None; config_history_length],
-        };
-
-        let config1_ended_at = staked_at + 250; 
-
-        let config1 = StakePoolConfig::new_mock(
-            staked_at - 1000, // started when the first config ended
-            Some(config1_ended_at), // Ended on the half way of the first period
-            Reward::Fixed,
-            10, // % reward rate
-        );
-
-        let config2 = StakePoolConfig::new_mock(
-            config1_ended_at, // started when the first config ended
-            None,  // Not ended
-            Reward::Fixed,
-            5, // % reward rate now is lower
-        );
-
-        config_history.append(config1);
-        config_history.append(config2);
-
-        assert_eq!(config_history.head(), 2);
-        assert_eq!(config_history.tail(), 0);
-
-        let member_stake = MemberStake::new_mock(staked_at, 0);
-
-        let (reward, cursor) = reward
-            .calculate(
-                reward_period, 
-                staked_by_user, 
-                current_timestamp,
-                &config_history, 
-                &member_stake,
-            );
-
-        assert_eq!(reward, 12);
-        assert_eq!(cursor, 1);
-    }
-
-    #[test]
-    fn zero_rewards() {
-        let reward = Reward::Fixed;
-        let config_history_length: usize = 10;
-        let staked_at = 1650106095;
-
-        let reward_period = 500; // secs
-        let staked_by_user = 100; // tokens
-        let current_timestamp = staked_at + 400; // A little bit less than the reward period
-
-        let mut config_history = ConfigHistory {
-            head: 0,
-            tail: 0,
-            history: vec![None; config_history_length],
-        };
-
-        let config = StakePoolConfig::new_mock(
-            staked_at - 1000, // started some time before the stake happend
-            None,  // Not ended
-            Reward::Fixed,
-            10, // % reward rate
-        );
-
-        config_history.append(config);
-
-        assert_eq!(config_history.head(), 1);
-        assert_eq!(config_history.tail(), 0);
-
-        let member_stake = MemberStake::new_mock(staked_at, 0);
-
-        let (reward, cursor) = reward
-            .calculate(
-                reward_period, 
-                staked_by_user, 
-                current_timestamp,
-                &config_history, 
-                &member_stake,
-            );
-
-        assert_eq!(reward, 0);
-        assert_eq!(cursor, 0);
-    }
-
-    impl MemberStake {
-        fn new_mock(staked_at: i64, config_cursor: u32) -> MemberStake {
-            MemberStake {
-                owner: Pubkey::default(), // it does not matter for the test
-                vault: Pubkey::default(), // it does not matter for the test
-                bump: u8::default(), // it does not matter for the test
-                stake_pool: Pubkey::default(), // it does not matter for the test
+                program_ends_at,
                 staked_at,
-                config_cursor,
-            }
-        }
+                staked_by_user,
+                reward_period,
+                reward_rate as u128,
+                total_staked,
+            ).unwrap();
+
+        assert_eq!(reward_amount, 100); // 10% from 1000 tokens for one reward periods
+        assert_eq!(reward_payed_for, staked_at + reward_period); // paid for exactly one reward periods
+
+        let reward_tokens_for_owner = reward_amount
+            .checked_mul(1).unwrap()
+            .checked_div(100).unwrap();
+        let reward_tokens_for_user = reward_amount.checked_sub(reward_tokens_for_owner).unwrap();
+
+        assert_eq!(reward_tokens_for_owner, 1);
+        assert_eq!(reward_tokens_for_user, 99);
     }
 
-    impl StakePoolConfig {
-        fn new_mock(started_at: i64, ended_at: Option<i64>, reward_type: Reward,  reward_metadata: u128) -> StakePoolConfig {
-            StakePoolConfig {
-                started_at,
-                ended_at,
-                reward_metadata,
-                total_staked_tokens: 1000, // it does not matter for the test
-                unstake_delay: 100, // it does not matter for the test
-                unstake_forse_fee_percent: 10, // it does not matter for the test
-                reward_type: reward_type.into(),
-            }
-        }
+    #[test]
+    fn fixed_config_two_reward_periods() {
+        let staked_at: u64 = 1650106095;
+        let program_ends_at:u64 = staked_at * 2;
+        let reward = Reward::Fixed;
+        let reward_rate: u8 =  10; // %
+        let reward_period: u64 = 500; // secs
+        let staked_by_user: u64 = 100; // tokens
+        let current_timestamp: u64 = staked_at + (reward_period * 2) + 100; // A little bit more than two reward periods
+        let total_staked: u128 = staked_by_user as u128;
+
+        let (reward_amount, reward_payed_for) = reward
+            .calculate(
+                current_timestamp,
+                program_ends_at,
+                staked_at,
+                staked_by_user,
+                reward_period,
+                reward_rate as u128,
+                total_staked,
+            ).unwrap();
+
+        assert_eq!(reward_amount, 20); // 10% from 100 tokens for two reward periods
+        assert_eq!(reward_payed_for, staked_at + reward_period * 2); // paid for exactly two reward periods
     }
 }
 

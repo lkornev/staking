@@ -10,19 +10,18 @@ pub struct NewStakePool<'info> {
         mut, 
         seeds = [Factory::PDA_SEED], 
         bump = factory.bump,
-        has_one = owner @ SPError::NewPoolOwnerMistmatch
+        has_one = owner @ SPError::NewPoolOwnerMismatch
     )]
     pub factory: Account<'info, Factory>,
     #[account(
         init, 
         payer = owner,
         space = 8 + StakePool::SPACE,
+        // TODO replace and connect with the factory and some random pubkey
         seeds = [&[reward as u8]],
         bump,
     )]
     pub stake_pool: Account<'info, StakePool>,
-    #[account(zero)]
-    pub config_history: Account<'info, ConfigHistory>,
     #[account(mut)]
     pub owner: Signer<'info>,
     pub clock: Sysvar<'info, Clock>,
