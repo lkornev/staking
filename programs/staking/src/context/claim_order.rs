@@ -92,7 +92,7 @@ impl<'info> ClaimReward<'info> {
         let reward_tokens_for_user = reward_tokens.checked_sub(reward_tokens_for_owner).unwrap();
 
         self.transfer_reward_tokens_to_user(reward_tokens_for_user)?;
-        self.transfer_reward_tokens_to_user(reward_tokens_for_owner)
+        self.transfer_reward_tokens_to_owner(reward_tokens_for_owner)
     }
 
     fn transfer_reward_tokens_to_user(&self, amount: u64) -> Result<()> {
