@@ -98,7 +98,7 @@ impl<'info> ClaimReward<'info> {
     fn transfer_reward_tokens_to_user(&self, amount: u64) -> Result<()> {
         let seeds = &[
             Factory::PDA_SEED,
-            &[self.member.bump]
+            &[self.factory.bump]
         ];
 
         token::transfer(
@@ -118,7 +118,7 @@ impl<'info> ClaimReward<'info> {
     fn transfer_reward_tokens_to_owner(&self, amount: u64) -> Result<()> {
         let seeds = &[
             Factory::PDA_SEED,
-            &[self.member.bump]
+            &[self.factory.bump]
         ];
 
         token::transfer(

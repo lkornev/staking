@@ -9,7 +9,7 @@ import { createMemberRPC } from "./rpc/create-member";
 import { claimRewardRPC } from "./rpc/claim-reward";
 import { Check } from "./check/check";
 import { sleepTill } from "./helpers/general";
-import { getAccount } from "@solana/spl-token";
+import { Reward } from "./types/reward";
 
 describe("staking", () => {
     anchor.setProvider(anchor.AnchorProvider.env());
@@ -21,9 +21,11 @@ describe("staking", () => {
         await Check.factory(ctx);        
     });
 
-    it("Creates new staking pool instance with fixed rewards", async () => {
-        await newStakePoolRPC(ctx, ctx.PDAS.stakePoolFixed);
-        await Check.newStakePool(ctx, ctx.PDAS.stakePoolFixed);
+    it("Deposits reward tokens", async () => {
+        await Check.depositReward(ctx, depositRewardRPC, { 
+            rewardAmountBefore: 0,
+            rewardAmountAfter: ctx.owner.initialRewardTokensAmount 
+        });
     });
 
     it("Creates member", async () => {
@@ -31,23 +33,38 @@ describe("staking", () => {
         await Check.newMember(ctx, ctx.PDAS.member);
     });
 
-    it("Deposits tokens", async () => {
+    it("Deposits tokens for future stakes", async () => {
         await Check.memberDeposit(ctx, ctx.PDAS.member, depositRPC);
     });
 
-    it("Stake tokens", async () => { 
-        await Check.memberStake(ctx, ctx.PDAS.stakePoolFixed, ctx.PDAS.member, ctx.PDAS.memberStakeFixed, stakeRPC);
+    let testStaking = async (reward: "fixed" | "unfixed") => {
+        it("Creates new staking pool instance", async () => {
+            await newStakePoolRPC(ctx, ctx.PDAS[reward].stakePool);
+            await Check.newStakePool(ctx, ctx.PDAS[reward].stakePool);
+        });
+
+        it("Stake tokens", async () => {
+            await Check.memberStake(ctx, ctx.PDAS[reward].stakePool, ctx.PDAS.member, ctx.PDAS[reward].memberStake, stakeRPC);
+        });
+
+        it("Claim reward", async () => {
+            let stakedAt = Number((await ctx.program.account.memberStake.fetch(ctx.PDAS[reward].memberStake.key)).stakedAt);
+            let rewardPeriod = Number(ctx.PDAS[reward].stakePool.rewardPeriod);
+            await sleepTill((stakedAt + rewardPeriod + rewardPeriod * 0.5) * 1000);
+
+            await Check.claimReward(
+                ctx,
+                ctx.PDAS[reward].memberStake, 
+                claimRewardRPC
+            );
+        });
+    };
+
+    describe("with fixed reward", async () => {
+        await testStaking(Reward.Fixed.name);
     });
 
-    it("Deposits tokens reward", async () => {
-        await Check.depositReward(ctx, depositRewardRPC, { rewardAmountBefore: 0 });
-    });
-
-    it("Claim reward", async () => {
-        let stakedAt = (await ctx.program.account.memberStake.fetch(ctx.PDAS.memberStakeFixed.key)).stakedAt;
-
-        // Wait one reward period + extra sec, just in case.
-        sleepTill(((Number(stakedAt.add(ctx.PDAS.stakePoolFixed.rewardPeriod)) + 1000) * 1000));
-        await Check.claimReward(ctx, ctx.PDAS.stakePoolFixed, ctx.PDAS.member, ctx.PDAS.memberStakeFixed, claimRewardRPC);
+    describe("with unfixed reward", async () => {
+        await testStaking(Reward.Unfixed.name);
     });
 });

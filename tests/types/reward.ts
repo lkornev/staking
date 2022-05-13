@@ -5,6 +5,7 @@ export const Reward: { [key: string]: RewardType } = {
     Fixed: {
         index: 0,
         value: { fixed: {} },
+        name: 'fixed',
     },
     /// A stakeholder will receive a part of tokens (`reward_per_period`)
     /// in proportion to the tokens of the all stakeholders in the pool.
@@ -15,20 +16,12 @@ export const Reward: { [key: string]: RewardType } = {
     Unfixed: {
         index: 1,
         value: { unfixed: {} },
+        name: 'unfixed',
     },
 }
 
 export type RewardType = {
     index: 0 | 1,
-    value: { [key: string]: {} }
+    value: { [key: string]: {} },
+    name: "fixed" | "unfixed",
 }
-
-export type RewardFixed = {
-    index: 0,
-    value: { fixed: {} },
-};
-
-export type RewardUnfixed = {
-    index: 1,
-    value: { unfixed: {} },
-};

@@ -35,7 +35,7 @@ pub struct StakePool {
     /// 
     /// If the `reward_type` is Unfixed
     /// `reward_metadata` is the amount of reward tokens that will be shared 
-    /// in proportion to the user's staked tokens among all members.
+    /// in proportion to a user's staked tokens among all members.
     /// Should be greater than 0.
     pub reward_type: Reward,
     pub reward_metadata: u128,

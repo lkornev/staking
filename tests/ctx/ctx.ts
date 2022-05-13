@@ -24,11 +24,16 @@ export interface Ctx {
     program: Program<Staking>,
     PDAS: {
         factory: Factory,
-        stakePoolFixed: StakePool,
         member: Member,
-        memberStakeFixed: MemberStake,
+        fixed: StakeGroup,
+        unfixed: StakeGroup,
     },
     owner: Owner,
+}
+
+export interface StakeGroup  {
+    stakePool: StakePool,
+    memberStake: MemberStake,
 }
 
 export async function createCtx(): Promise<Ctx> {
@@ -38,17 +43,21 @@ export async function createCtx(): Promise<Ctx> {
     const owner = await createOwner({program, connection});
     const factory = await createFactory({program, connection, owner});
     const member = await createMember({program, connection, factory});
-    const stakePoolFixed = await createStakePool({program, rewardType: Reward.Fixed, rewardMetadata: new BN(10)});
-    const memberStakeFixed = await createMemberStake({ connection, program, factory, member, stakePool: stakePoolFixed });
+
+    let stakeGroup = async (rewardType: RewardType, rewardData: BN, amountToStake: BN): Promise<StakeGroup> => {
+        const stakePool = await createStakePool({program, rewardType, rewardMetadata: rewardData});
+        const memberStake = await createMemberStake({ connection, program, factory, member, stakePool}, amountToStake);
+        return { stakePool, memberStake };
+    }
 
     return {
         connection,
         program,
         PDAS: {
             factory,
-            stakePoolFixed,
             member,
-            memberStakeFixed,
+            fixed: await stakeGroup(Reward.Fixed, new BN(10), member.amountToStake.fixed),
+            unfixed: await stakeGroup(Reward.Unfixed,  new BN(200), member.amountToStake.unfixed),
         },
         owner,
     }
@@ -157,11 +166,11 @@ export interface StakePoolCtx {
 
 export async function createStakePool(ctx: StakePoolCtx): Promise<StakePool> {
     const [stakePoolPDA, stakePoolBump] = await PublicKey.findProgramAddress(
-        [ Uint8Array.from([Reward.Fixed.index]) ],
+        [ Uint8Array.from([ctx.rewardType.index]) ],
         ctx.program.programId
     );
 
-    let rewardPeriod = ctx.rewardPeriod || new BN(2);
+    let rewardPeriod = ctx.rewardPeriod || new BN(4);
 
     return {
         key: stakePoolPDA,
@@ -184,6 +193,10 @@ export interface Member extends CtxPDA {
     vaultPendingUnstaking: Keypair,
     stakeTokenAmount: BN,
     amountToDeposit: BN,
+    amountToStake: {
+        fixed: BN,
+        unfixed: BN,
+    },
     beneficiaryRewardVault: TokenAccount,
 }
 
@@ -242,6 +255,9 @@ export async function createMember(ctx: MemberCtx): Promise<Member> {
         beneficiary.publicKey
     );
 
+    const fixedAmountToStake = amountToDeposit.div(new BN(2));
+    const unfixedAmountToStake = amountToDeposit.sub(fixedAmountToStake);
+
     return {
         key: memberPDA,
         bump: memberBump,
@@ -251,6 +267,10 @@ export async function createMember(ctx: MemberCtx): Promise<Member> {
         vaultPendingUnstaking,
         stakeTokenAmount,
         amountToDeposit,
+        amountToStake: {
+            fixed: fixedAmountToStake,
+            unfixed: unfixedAmountToStake,
+        },
         beneficiaryRewardVault,
     }
 }
@@ -270,7 +290,7 @@ export interface MemberStakeCtx {
     member: Member,
 }
 
-export async function createMemberStake(ctx: MemberStakeCtx, amountToStake?: BN): Promise<MemberStake> {
+export async function createMemberStake(ctx: MemberStakeCtx, amountToStake: BN): Promise<MemberStake> {
     const [memberStake, memberStakeBump] = await PublicKey.findProgramAddress(
         [
             ctx.member.key.toBuffer(),
@@ -292,7 +312,7 @@ export async function createMemberStake(ctx: MemberStakeCtx, amountToStake?: BN)
         bump: memberStakeBump,
         member: ctx.member,
         stakePool: ctx.stakePool,
-        amountToStake: amountToStake || ctx.member.amountToDeposit, // By default member stakes deposited all tokens
+        amountToStake: amountToStake,
         vaultStaked: vaultStaked,
     }
 }

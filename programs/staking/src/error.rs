@@ -10,8 +10,16 @@ pub enum SPError {
     StakePoolPDAInvalid,
     #[msg("Not enough tokens for the deposition. Please add more tokens to your account.")]
     InsufficientAmountOfTokensToDeposit,
-    #[msg("No reward available")]
-    NoRewardAvailable,
+    #[msg("Current stake is zero tokens")]
+    UserStakeZero,
+    #[msg("You should wait at least full reward period to claim reward")]
+    RewardPeriodNotPassed,
     #[msg("Not enough reward tokens in the staking factory")]
     InsufficientAmountOfTokensToClaim,
+    #[msg("Reward rate should be greater than 1")]
+    RewardRateTooSmall,
+    #[msg("Reward rate should be lower than 100")]
+    RewardRateTooHigh,
+    #[msg("No reward tokens available for sharing between stakers")]
+    TokensToShareEmpty,
 }

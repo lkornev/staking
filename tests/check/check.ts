@@ -4,7 +4,6 @@ import {
 } from '@solana/spl-token';
 import { expect } from "chai";
 import { Ctx, Member, MemberStake, StakePool } from '../ctx/ctx';
-import { Reward } from '../types/reward';
 
 export namespace Check {
 
@@ -17,7 +16,7 @@ export namespace Check {
     }
 
     export async function newStakePool(ctx: Ctx, stakePool: StakePool) {
-        const stakePoolAcc = await ctx.program.account.stakePool.fetch(ctx.PDAS.stakePoolFixed.key);
+        const stakePoolAcc = await ctx.program.account.stakePool.fetch(stakePool.key);
 
         expect(`${stakePoolAcc.totalStakedTokens}`).to.be.eq(`${0}`);
         expect(`${stakePoolAcc.unstakeDelay}`).to.be.eq(`${stakePool.unstakeDelay}`);
@@ -82,7 +81,7 @@ export namespace Check {
     export async function depositReward(
         ctx: Ctx, 
         depositReward: (ctx: Ctx, rewardTokensAmount: number) => Promise<void>, 
-        checks: { rewardAmountBefore: number }
+        checks: { rewardAmountBefore: number, rewardAmountAfter: number }
     ) {
         const factory = await ctx.program.account.factory.fetch(ctx.PDAS.factory.key);
         const factoryRewardVault = await getTokenAccount(ctx.connection, factory.vaultReward);
@@ -92,25 +91,27 @@ export namespace Check {
         await depositReward(ctx, Number(ctx.owner.initialRewardTokensAmount));
 
         const factoryRewardVaultChanged = await getTokenAccount(ctx.connection, factory.vaultReward);
-        expect(`${factoryRewardVaultChanged.amount}`).to.be.eq(`${ctx.owner.initialRewardTokensAmount}`);
+        expect(`${factoryRewardVaultChanged.amount}`).to.be.eq(`${checks.rewardAmountAfter}`);
     }
 
     export async function claimReward(
         ctx: Ctx,
-        stakePool: StakePool, 
-        member: Member, 
         memberStake: MemberStake,
         claimReward: (ctx: Ctx, memberStake: MemberStake) => Promise<void>
     ) {
         const factory = await ctx.program.account.factory.fetch(ctx.PDAS.factory.key);
-        const userRewardTokensBefore = (await getTokenAccount(ctx.connection, ctx.PDAS.member.beneficiaryRewardVault.address)).amount;
+        const userRewardBefore = (await getTokenAccount(ctx.connection, ctx.PDAS.member.beneficiaryRewardVault.address)).amount;
+        const ownerFeeBefore = (await getTokenAccount(ctx.connection, ctx.owner.feeRewardVault)).amount;
 
         await claimReward(ctx, memberStake);
 
-        const userRewardTokensAfter = (await getTokenAccount(ctx.connection, ctx.PDAS.member.beneficiaryRewardVault.address)).amount;
-        expect(Number(userRewardTokensAfter)).to.be.above(Number(userRewardTokensBefore));
+        const userRewardAfter = (await getTokenAccount(ctx.connection, ctx.PDAS.member.beneficiaryRewardVault.address)).amount;
+        expect(Number(userRewardAfter)).to.be.above(Number(userRewardBefore));
 
         const factoryRewardVaultAfter = await getTokenAccount(ctx.connection, factory.vaultReward);
         expect(Number(factoryRewardVaultAfter.amount)).to.be.below(Number(ctx.owner.initialRewardTokensAmount));
+
+        const ownerFeeAfter = (await getTokenAccount(ctx.connection, ctx.owner.feeRewardVault)).amount;
+        expect(Number(ownerFeeAfter)).to.be.above(Number(ownerFeeBefore));
     }
 }
