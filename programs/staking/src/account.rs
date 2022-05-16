@@ -47,14 +47,6 @@ pub struct StakePool {
     /// The total amount of tokens that been staked by all users of the pool
     /// when this config was active.
     pub total_staked_tokens: u128,
-    /// The time in seconds a Member have to wait 
-    /// to finish unstaking without paying the fee (`unstake_force_fee_percent`).
-    pub unstake_delay: u64,
-    /// If a user wants unstake without waiting `unstake_delay`
-    /// the user can pay the `unstake_force_fee_percent` and receives the amount of tokens equals to 
-    /// staked_tokens - (staked_tokens * unstake_force_fee_percent) / 100.
-    /// Should be in the range 0 - 100. (TODO check range)
-    pub unstake_force_fee_percent: u8,
     pub bump: u8,
     /// The percentage of reward tokens the owner will receive from each user's reward.
     pub owner_interest_percent: u8,
@@ -66,7 +58,7 @@ pub struct StakePool {
 }
 
 impl StakePool {
-    pub const SPACE: usize = 1 + 16 + 8 + 8 + 16 + 8 + 1 * 3 + 4 + 8;
+    pub const SPACE: usize = 1 + 16 + 8 + 8 + 16 + 1 + 1 + 4 + 8;
 }
 
 /// Member account represents a user of the stake pool factory program.
@@ -78,18 +70,11 @@ pub struct Member {
     /// Tokens on the `vault_free` do not produce rewards.
     /// Used as a transit zone between external and internal wallets/vaults.
     pub vault_free: Pubkey,
-    /// Tokens transferred to `vault_pending_unstaking` after calling `start_unstake` method.
-    /// The tokens inside `vault_pending_unstaking` are not giving the rewards any more.
-    /// The tokens could be forced to be transferred to `vault_free` immediately
-    /// by paying the `unstake_force_fee_percent` penalty.
-    /// Or they could be transferred for free after the period of time
-    /// defined in the `unstake_delay` variable in the StakePool. 
-    pub vault_pending_unstaking: Pubkey,
     pub bump: u8,
 }
 
 impl Member {
-    pub const SPACE: usize = 32 * 3 + 8;
+    pub const SPACE: usize = 32 * 2 + 8;
 }
 
 #[account]
@@ -109,4 +94,24 @@ pub struct MemberStake {
 
 impl MemberStake {
     pub const SPACE: usize = 32 * 3 + 8 + 8 + 1;
+}
+
+#[account]
+pub struct MemberPendingUnstake {
+    /// StakePool the member has the stake in
+    pub stake_pool: Pubkey,
+    /// The owner and beneficiary of the stake and the Member account.
+    pub beneficiary: Pubkey,
+    /// The tokens transferred to `vault_pending_unstaking` after calling `start_unstake` method.
+    /// The tokens inside `vault_pending_unstaking` are not giving the rewards any more.
+    /// The tokens could be transferred for free after the period of time
+    /// defined in the `unstake_delay` variable in the StakePool. 
+    pub vault_pending_unstake: Pubkey,
+    /// The UNIX timestamp when the unstaking started
+    pub unstaked_at: u64,
+    pub bump: u8,
+}
+
+impl MemberPendingUnstake {
+    pub const SPACE: usize = 32 * 3 + 8 + 1;
 }

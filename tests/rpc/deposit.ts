@@ -11,7 +11,7 @@ export async function depositRPC(ctx: Ctx, member: Member) {
         beneficiary: member.beneficiary.publicKey,
         beneficiaryTokenAccount: member.beneficiaryTokenAccount.address,
         member: member.key,
-        vaultFree: member.vaultFree.publicKey,
+        vaultFree: member.vaultFree,
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
     })

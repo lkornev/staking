@@ -18,3 +18,4 @@ default = []
 [dependencies]
 anchor-lang = { version = "0.24.2" }
 anchor-spl = { version = "0.24.2" }
+borsh = "0.9.3"

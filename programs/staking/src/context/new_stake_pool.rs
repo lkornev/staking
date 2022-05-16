@@ -7,14 +7,14 @@ use crate::error::SPError;
 #[instruction(reward: Reward)]
 pub struct NewStakePool<'info> {
     #[account(
-        mut, 
+        mut,
         seeds = [Factory::PDA_SEED], 
         bump = factory.bump,
         has_one = owner @ SPError::NewPoolOwnerMismatch
     )]
     pub factory: Account<'info, Factory>,
     #[account(
-        init, 
+        init,
         payer = owner,
         space = 8 + StakePool::SPACE,
         // TODO replace and connect with the factory and some random pubkey

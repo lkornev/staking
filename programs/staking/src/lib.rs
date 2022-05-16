@@ -28,10 +28,8 @@ pub mod staking {
         reward: Reward,
         bump: u8,
         ends_at: u64,
-        unstake_delay: u64,
-        unstake_force_fee_percent: u8,
         min_owner_reward: u32,
-        reward_metadata: u128, // Could be any data depending on the `Reward`
+        reward_metadata: u128, // Could be any data depending on the `Reward` // TODO combine with `reward` into a single struct
         owner_interest_percent: u8,
         reward_period: u64,
     ) -> Result<()> {
@@ -40,8 +38,6 @@ pub mod staking {
         stake_pool.started_at = ctx.accounts.clock.unix_timestamp as u64;
         stake_pool.ends_at = ends_at;
         stake_pool.total_staked_tokens = 0;
-        stake_pool.unstake_delay = unstake_delay;
-        stake_pool.unstake_force_fee_percent = unstake_force_fee_percent;
         stake_pool.min_owner_reward = min_owner_reward;
         stake_pool.reward_type = reward;
         stake_pool.reward_metadata = reward_metadata;
@@ -58,10 +54,8 @@ pub mod staking {
         member_bump: u8,
     ) -> Result<()> {
         let member = &mut ctx.accounts.member;
-
         member.beneficiary = *ctx.accounts.beneficiary.key;
-        member.vault_free = (*ctx.accounts.vault_free).key();
-        member.vault_pending_unstaking = (*ctx.accounts.vault_pending_unstaking).key();
+        member.vault_free = ctx.accounts.vault_free.key();
         member.bump = member_bump;
 
         Ok(())
@@ -81,7 +75,6 @@ pub mod staking {
     ) -> Result<()> {
         let beneficiary_tokens = ctx.accounts.beneficiary_token_account.amount;
         require!(amount <= beneficiary_tokens, SPError::InsufficientAmountOfTokensToDeposit);
-
         ctx.accounts.transfer_user_tokens_to_program(amount)
     }
 
@@ -107,7 +100,6 @@ pub mod staking {
         member_stake.stake_pool = ctx.accounts.stake_pool.key();
 
         ctx.accounts.transfer_tokens_to_staked_vault(amount)?;
-
         ctx.accounts.stake_pool.total_staked_tokens += amount as u128;
 
         Ok(())
@@ -116,8 +108,7 @@ pub mod staking {
     /// Deposit a reward for stakers.
     /// The reward is distributed on demand pro rata staked tokens.
     pub fn deposit_reward(ctx: Context<DepositReward>, amount: u64) -> Result<()> {
-        // TODO check the amount is less or equals to the amount of tokens inside vault_owner  
-        // and throw an error if needed
+        // TODO check the amount is less or equals to the amount of tokens inside vault_owner
 
         ctx.accounts.transfer_tokens_to_reward_vault(amount)
     }
@@ -137,25 +128,36 @@ pub mod staking {
     }
 
     /// Move tokens from the `staked vault` to the `pending unstaking vault`.
-    /// Saves data to finish unstaking in the `pending unstaking` account provided by the user.
-    /// The `pending unstaking` account must belongs to the user.
-    /// Member must claim the rewards before unstaking tokens. (TODO Check)
-    pub fn start_unstake(
-        _ctx: Context<StartUnstake>,
+    /// Save data to finish unstaking in the `pending unstaking` account provided by the user.
+    pub fn start_unstake_all(
+        ctx: Context<StartUnstakeAll>,
+        reward: Reward, // TODO remove from here and from the accounts
+        member_unstake_bump: u8,
     ) -> Result<()> {
-        // TODO remove MemberStake account and return lamports to the stake's owner
-        // TODO update total_staked_tokens in the stake pool
-        unimplemented!()
+        require!(ctx.accounts.vault_staked.amount > 0, SPError::NoStakedTokens);
+
+        let unstake = &mut ctx.accounts.member_pending_unstake;
+        unstake.bump = member_unstake_bump;
+        unstake.stake_pool = ctx.accounts.stake_pool.key();
+        unstake.beneficiary = ctx.accounts.beneficiary.key();
+        unstake.vault_pending_unstake = ctx.accounts.vault_pending_unstake.key();
+        unstake.unstaked_at = ctx.accounts.clock.unix_timestamp as u64;
+
+        let stake_amount = ctx.accounts.vault_staked.amount;
+
+        ctx.accounts.transfer_staked_tokens_to_pu_vault(stake_amount)?;
+
+        ctx.accounts.stake_pool.total_staked_tokens -= stake_amount as u128;
+
+        Ok(())
     }
 
     /// Move tokens from `pending unstaking vault` to `free vault`.
-    pub fn finish_unstake(
-        _ctx: Context<FinishUnstake>,
-        // Unstake immediately without waiting for `unstake_delay` by paying the `unstake_force_fee`
-        _force: bool,
+    pub fn finish_unstake_all(
+        _ctx: Context<FinishUnstakeAll>,
     ) -> Result<()> {
-        // TODO if unstake_force_fee === 0 or unstake_delay passed, than ignore force flag
-        unimplemented!()
+
+        Ok(())
     }
 
     /// Withdraw tokens from internal `free vault` controlled by the program
@@ -164,13 +166,9 @@ pub mod staking {
     /// To withdraw deposited tokens from the stake program user firstly
     /// have to transfer tokens to his `free vault` inside the program 
     /// using start_unstake and finish_unstake methods.
-    /// 
-    /// To get rewards for staking see the `claim_reward` method.
-    pub fn withdraw(
-        _ctx: Context<Withdraw>,
+    pub fn withdraw_all(
+        _ctx: Context<WithdrawAll>,
     ) -> Result<()> {
-        // TODO if all user accounts will be empty after withdraw,
-        // than destroy token accounts and return rent-exempt sol to the user
         unimplemented!()
     }
 

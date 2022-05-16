@@ -1,14 +1,17 @@
 use anchor_lang::prelude::*;
 use crate::account::*;
-use anchor_spl::token::{TokenAccount, Token};
+use anchor_spl::token::{TokenAccount, Token, Mint};
+use anchor_spl::associated_token::AssociatedToken;
 
 #[derive(Accounts)]
 pub struct CreateMember<'info> {
     #[account(
         seeds = [Factory::PDA_SEED],
         bump = factory.bump,
+        has_one = stake_token_mint,
     )]
     pub factory: Account<'info, Factory>,
+    pub stake_token_mint: Box<Account<'info, Mint>>,
     #[account(
         init,
         payer = beneficiary,
@@ -21,20 +24,16 @@ pub struct CreateMember<'info> {
     )]
     pub member: Account<'info, Member>,
     #[account(
-        mut, 
-        // TODO add an error with useful text
-        constraint = vault_free.owner == member.to_account_info().key(),
-        constraint = vault_free.mint == factory.stake_token_mint,
+        init,
+        payer = beneficiary,
+        associated_token::mint = stake_token_mint,
+        associated_token::authority = member,
     )]
     pub vault_free: Box<Account<'info, TokenAccount>>,
-    #[account(
-        // TODO add errors with useful text
-        constraint = vault_pending_unstaking.owner == member.to_account_info().key(), 
-        constraint = vault_pending_unstaking.mint == vault_free.mint,
-    )]
-    pub vault_pending_unstaking: Box<Account<'info, TokenAccount>>,
     #[account(mut)]
     pub beneficiary: Signer<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub rent: Sysvar<'info, Rent>,
 }

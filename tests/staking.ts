@@ -7,6 +7,7 @@ import { stakeRPC } from './rpc/stake';
 import { depositRewardRPC } from "./rpc/deposit-reward";
 import { createMemberRPC } from "./rpc/create-member";
 import { claimRewardRPC } from "./rpc/claim-reward";
+import { startUnstakeAllRPC } from "./rpc/start-unstake-all";
 import { Check } from "./check/check";
 import { sleepTill } from "./helpers/general";
 import { Reward } from "./types/reward";
@@ -24,7 +25,7 @@ describe("staking", () => {
     it("Deposits reward tokens", async () => {
         await Check.depositReward(ctx, depositRewardRPC, { 
             rewardAmountBefore: 0,
-            rewardAmountAfter: ctx.owner.initialRewardTokensAmount 
+            rewardAmountAfter: ctx.owner.initialRewardTokensAmount,
         });
     });
 
@@ -43,20 +44,19 @@ describe("staking", () => {
             await Check.newStakePool(ctx, ctx.PDAS[reward].stakePool);
         });
 
-        it("Stake tokens", async () => {
+        it("Stakes tokens", async () => {
             await Check.memberStake(ctx, ctx.PDAS[reward].stakePool, ctx.PDAS.member, ctx.PDAS[reward].memberStake, stakeRPC);
         });
 
-        it("Claim reward", async () => {
+        it("Claims reward", async () => {
             let stakedAt = Number((await ctx.program.account.memberStake.fetch(ctx.PDAS[reward].memberStake.key)).stakedAt);
             let rewardPeriod = Number(ctx.PDAS[reward].stakePool.rewardPeriod);
             await sleepTill((stakedAt + rewardPeriod + rewardPeriod * 0.5) * 1000);
+            await Check.claimReward(ctx, ctx.PDAS[reward].memberStake, claimRewardRPC);
+        });
 
-            await Check.claimReward(
-                ctx,
-                ctx.PDAS[reward].memberStake, 
-                claimRewardRPC
-            );
+        it("Starts unstaking", async () => {
+            await Check.startUnstakeAll(ctx, ctx.PDAS[reward].memberUnstakeAll, startUnstakeAllRPC);
         });
     };
 

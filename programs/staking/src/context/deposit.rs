@@ -36,7 +36,7 @@ impl<'info> Deposit<'info> {
     pub fn transfer_user_tokens_to_program(&self, amount_to_deposit: u64) -> Result<()> {
         let token_program = self.token_program.to_account_info();
         let from = self.beneficiary_token_account.to_account_info();
-        let to = (*self.vault_free).to_account_info();
+        let to = self.vault_free.to_account_info();
         let authority = self.beneficiary.to_account_info();
 
         token::transfer(

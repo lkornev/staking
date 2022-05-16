@@ -9,7 +9,7 @@ export async function claimRewardRPC(ctx: Ctx, memberStake: MemberStake) {
             stakePool: memberStake.stakePool.key,
             memberStake: memberStake.key,
             member: memberStake.member.key,
-            vaultStaked: memberStake.vaultStaked.publicKey,
+            vaultStaked: memberStake.vaultStaked,
             vaultReward: ctx.PDAS.factory.vaultReward,
             beneficiary: memberStake.member.beneficiary.publicKey,
             beneficiaryRewardVault: memberStake.member.beneficiaryRewardVault.address,

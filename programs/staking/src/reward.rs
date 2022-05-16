@@ -18,8 +18,6 @@ pub enum Reward {
 }
 
 impl Reward {
-    /// Returns the reward tokens amount and the new config index in the reward history
-    /// (reward tokens amount, config index)
     pub fn calculate<'info>(
         &self,
         current_time: u64,

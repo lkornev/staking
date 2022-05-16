@@ -4,11 +4,12 @@ use crate::reward::Reward;
 use anchor_spl::token::{self, TokenAccount, Token, Mint};
 use anchor_spl::associated_token::AssociatedToken;
 
+
 #[derive(Accounts)]
 #[instruction(reward: Reward)]
-pub struct Stake<'info> {
+pub struct StartUnstakeAll<'info> {
     #[account(
-        seeds = [Factory::PDA_SEED],
+        seeds = [Factory::PDA_SEED], 
         bump = factory.bump,
         has_one = stake_token_mint,
     )]
@@ -28,30 +29,39 @@ pub struct Stake<'info> {
             factory.to_account_info().key.as_ref(),
         ],
         bump = member.bump,
-        has_one = beneficiary,
-        has_one = vault_free,
     )]
     pub member: Account<'info, Member>,
-    #[account(mut)]
-    pub vault_free: Box<Account<'info, TokenAccount>>,
     #[account(
-        init,
-        payer = beneficiary,
-        space = 8 + MemberStake::SPACE,
+        mut,
+        close = beneficiary,
         seeds = [
             stake_pool.to_account_info().key.as_ref(),
             member.to_account_info().key.as_ref(),
         ],
         bump,
+        has_one = vault_staked,
     )]
     pub member_stake: Account<'info, MemberStake>,
+    #[account(mut)]
+    pub vault_staked: Box<Account<'info, TokenAccount>>,
+    #[account(
+        init,
+        payer = beneficiary,
+        space = 8 + MemberPendingUnstake::SPACE,
+        seeds = [
+            stake_pool.to_account_info().key.as_ref(),
+            member_stake.to_account_info().key.as_ref(),
+        ],
+        bump,
+    )]
+    pub member_pending_unstake: Account<'info, MemberPendingUnstake>,
     #[account(
         init,
         payer = beneficiary,
         associated_token::mint = stake_token_mint,
-        associated_token::authority = member_stake,
+        associated_token::authority = stake_pool,
     )]
-    pub vault_staked: Box<Account<'info, TokenAccount>>, 
+    pub vault_pending_unstake: Box<Account<'info, TokenAccount>>,
     pub clock: Sysvar<'info, Clock>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
@@ -59,26 +69,25 @@ pub struct Stake<'info> {
     pub system_program: Program<'info, System>,
 }
 
-impl<'info> Stake<'info> {
-    pub fn transfer_tokens_to_staked_vault(&self, amount_to_stake: u64) -> Result<()> {
-        let token_program = self.token_program.to_account_info();
-        let from = self.vault_free.to_account_info();
-        let to = self.vault_staked.to_account_info();
-        let authority = self.member.to_account_info();
-
+impl<'info> StartUnstakeAll<'info> {
+    pub fn transfer_staked_tokens_to_pu_vault(&self, amount: u64) -> Result<()> {
         let seeds = &[
-            self.beneficiary.to_account_info().key.as_ref(),
-            self.factory.to_account_info().key.as_ref(),
-            &[self.member.bump]
+            self.stake_pool.to_account_info().key.as_ref(),
+            self.member.to_account_info().key.as_ref(),
+            &[self.member_stake.bump]
         ];
 
         token::transfer(
             CpiContext::new_with_signer(
-                token_program,
-                token::Transfer { from, to, authority },
+                self.token_program.to_account_info(),
+                token::Transfer {
+                    from: self.vault_staked.to_account_info(),
+                    to: self.vault_pending_unstake.to_account_info(),
+                    authority: self.member_stake.to_account_info(),
+                },
                 &[&seeds[..]],
             ),
-            amount_to_stake
+            amount
         )
     }
 }

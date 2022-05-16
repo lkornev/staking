@@ -22,4 +22,6 @@ pub enum SPError {
     RewardRateTooHigh,
     #[msg("No reward tokens available for sharing between stakers")]
     TokensToShareEmpty,
+    #[msg("No staked tokens")]
+    NoStakedTokens,
 }

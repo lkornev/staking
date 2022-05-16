@@ -9,8 +9,6 @@ export async function newStakePoolRPC(ctx: Ctx, stakePool: StakePool) {
         stakePool.rewardType.value,
         stakePool.bump,
         stakePool.endedAt,
-        stakePool.unstakeDelay, // secs
-        stakePool.unstakeForceFeePercent, // %,
         stakePool.minOwnerReward,
         stakePool.rewardMetadata,
         stakePool.ownerInterestPercent, // %

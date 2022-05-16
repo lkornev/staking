@@ -19,14 +19,13 @@ pub struct ClaimReward<'info> {
     #[account(
         mut,
         seeds = [
-            member.to_account_info().key.as_ref(),
             stake_pool.to_account_info().key.as_ref(),
+            member.to_account_info().key.as_ref(),
         ],
         bump,
         has_one = vault_staked,
         has_one = stake_pool,
         has_one = beneficiary,
-        constraint = member_stake.vault_staked == vault_staked.key(),
     )]
     pub member_stake: Account<'info, MemberStake>,
     #[account(
