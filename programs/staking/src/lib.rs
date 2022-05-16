@@ -147,7 +147,6 @@ pub mod staking {
         unstake.unstaked_at = ctx.accounts.clock.unix_timestamp as u64;
 
         let stake_amount = ctx.accounts.vault_staked.amount;
-
         ctx.accounts.transfer_staked_tokens_to_pu_vault(stake_amount)?;
 
         ctx.accounts.stake_pool.total_staked_tokens -= stake_amount as u128;
@@ -162,15 +161,14 @@ pub mod staking {
         ctx: Context<FinishUnstakeAll>,
         reward: Reward, // TODO remove from here and from the accounts
     ) -> Result<()> {
-        // TODO move tokens from `pending unstaking vault` to `free vault`.
-        // TODO destroy Unstake Acc and vault (Close acc instr)
-        // TODO destroy Stake Acc and vault (Close acc instr)
-
-        Ok(())
+        let unstake_amount = ctx.accounts.vault_pending_unstake.amount;
+        ctx.accounts.transfer_pu_tokens_to_free_vault(unstake_amount)?;
+        ctx.accounts.close_pending_unstake_vault()?;
+        ctx.accounts.close_stake_vault()
     }
 
     /// Withdraw tokens from internal `free vault` controlled by the program
-    /// to external user's wallet controlled by the user. (TODO check)
+    /// to external user's wallet controlled by the user.
     /// 
     /// To withdraw deposited tokens from the stake program user firstly
     /// have to transfer tokens to his `free vault` inside the program 

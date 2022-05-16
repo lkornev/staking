@@ -1,6 +1,7 @@
 import * as anchor from "@project-serum/anchor";
 import { 
     getAccount as getTokenAccount,
+    getMinimumBalanceForRentExemptAccount,
 } from '@solana/spl-token';
 import { PublicKey } from "@solana/web3.js";
 import { expect } from "chai";
@@ -137,11 +138,23 @@ export namespace Check {
         memberUnstakeAll: MemberUnstakeAll,
         finishUnstakeAll: (ctx: Ctx, memberUnstakeAll: MemberUnstakeAll) => Promise<void>,
     ) {
+        const beneficiaryKey = memberUnstakeAll.member.beneficiary.publicKey;
+        const vaultPUBefore = await getTokenAccount(ctx.connection, memberUnstakeAll.vaultPendingUnstake);
+        const vaultFreeBefore = await getTokenAccount(ctx.connection, memberUnstakeAll.member.vaultFree);
+        const beneficiaryLamportsBefore = (await ctx.connection.getAccountInfo(beneficiaryKey)).lamports;
+        const tokenAccountRent = await getMinimumBalanceForRentExemptAccount(ctx.connection);
+        const memberStakeRent = (await ctx.connection.getAccountInfo(memberUnstakeAll.memberStake.key)).lamports;
+        const memberPendingUnstakeRent = (await ctx.connection.getAccountInfo(memberUnstakeAll.key)).lamports;
+        const rentToBeReturned = 2 * tokenAccountRent + memberStakeRent + memberPendingUnstakeRent;
+
         await finishUnstakeAll(ctx, memberUnstakeAll);
-        // Staked amount transferred to pending unstake account
-        // const PUAmount = (await getTokenAccount(ctx.connection, memberUnstakeAll.vaultPendingUnstake)).amount;
-        // const stakedAmountAfter = (await getTokenAccount(ctx.connection, memberUnstakeAll.memberStake.vaultStaked)).amount;
-        // expect(Number(stakedAmountAfter)).to.be.eq(0);
-        // expect(`${PUAmount}`).to.be.eq(`${stakedAmountBefore}`);
+
+        const vaultFreeAfter = await getTokenAccount(ctx.connection, memberUnstakeAll.member.vaultFree);
+        const beneficiaryLamportsAfter = (await ctx.connection.getAccountInfo(beneficiaryKey)).lamports;
+
+        // All tokens have moved from vaultPU to vaultFree
+        expect(Number(vaultFreeAfter.amount) - Number(vaultFreeBefore.amount)).to.be.eq(Number(vaultPUBefore.amount));
+        // Rent-exempt lamports for no longer used accounts has returned to the member's beneficiary
+        expect(Number(beneficiaryLamportsAfter) - Number(beneficiaryLamportsBefore)).to.be.eq(rentToBeReturned);
     }
 }

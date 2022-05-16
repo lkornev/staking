@@ -1,7 +1,8 @@
 use anchor_lang::prelude::*;
 use crate::account::*;
 use crate::reward::Reward;
-use anchor_spl::token::{self, TokenAccount, Token};
+use anchor_spl::token::{self, TokenAccount, Token, CloseAccount};
+
 
 
 #[derive(Accounts)]
@@ -21,19 +22,16 @@ pub struct FinishUnstakeAll<'info> {
     #[account(mut)]
     pub beneficiary: Signer<'info>,
     #[account(
-        mut,
-        constraint = vault_beneficiary.owner == beneficiary.key(),
-        constraint = vault_beneficiary.mint == factory.stake_token_mint
-    )]
-    pub vault_beneficiary: Box<Account<'info, TokenAccount>>,
-    #[account(
         seeds = [
             beneficiary.to_account_info().key.as_ref(),
             factory.to_account_info().key.as_ref(),
         ],
         bump = member.bump,
+        has_one = vault_free,
     )]
     pub member: Account<'info, Member>,
+    #[account(mut)]
+    pub vault_free: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
         seeds = [
@@ -42,6 +40,7 @@ pub struct FinishUnstakeAll<'info> {
         ],
         bump,
         has_one = vault_staked,
+        close = beneficiary,
     )]
     pub member_stake: Account<'info, MemberStake>,
     #[account(mut)]
@@ -54,12 +53,13 @@ pub struct FinishUnstakeAll<'info> {
         ],
         bump = member_pending_unstake.bump,
         has_one = vault_pending_unstake,
+        close = beneficiary,
     )]
     pub member_pending_unstake: Account<'info, MemberPendingUnstake>,
     #[account(
         mut,
         constraint = vault_pending_unstake.owner == stake_pool.key(),
-        constraint = vault_pending_unstake.mint == factory.stake_token_mint
+        constraint = vault_pending_unstake.mint == factory.stake_token_mint,
     )]
     pub vault_pending_unstake: Box<Account<'info, TokenAccount>>,
     pub clock: Sysvar<'info, Clock>,
@@ -68,26 +68,65 @@ pub struct FinishUnstakeAll<'info> {
 }
 
 impl<'info> FinishUnstakeAll<'info> {
-    pub fn transfer_pu_tokens_to_beneficiary_vault(&self, amount: u64) -> Result<()> {
-        // let seeds = &[
-        //     self.stake_pool.to_account_info().key.as_ref(),
-        //     self.member.to_account_info().key.as_ref(),
-        //     &[self.member_stake.bump]
-        // ];
+    pub fn transfer_pu_tokens_to_free_vault(&self, amount: u64) -> Result<()> {
+        let seeds: &[&[u8]] = &[
+            // TODO change stake_pool seeds, remove reward
+            &[self.stake_pool.reward_type as u8],
+            &[self.stake_pool.bump]
+        ];
 
-        // token::transfer(
-        //     CpiContext::new_with_signer(
-        //         self.token_program.to_account_info(),
-        //         token::Transfer {
-        //             from: self.vault_staked.to_account_info(),
-        //             to: self.vault_pending_unstake.to_account_info(),
-        //             authority: self.member_stake.to_account_info(),
-        //         },
-        //         &[&seeds[..]],
-        //     ),
-        //     amount
-        // )
+        token::transfer(
+            CpiContext::new_with_signer(
+                self.token_program.to_account_info(),
+                token::Transfer {
+                    from: self.vault_pending_unstake.to_account_info(),
+                    to: self.vault_free.to_account_info(),
+                    authority: self.stake_pool.to_account_info(),
+                },
+                &[&seeds[..]],
+            ),
+            amount
+        )
+    }
 
-        unimplemented!()
+    pub fn close_pending_unstake_vault(&self) -> Result<()> {
+        let seeds: &[&[u8]] = &[
+            // TODO change stake_pool seeds, remove reward
+            &[self.stake_pool.reward_type as u8],
+            &[self.stake_pool.bump]
+        ];
+
+        token::close_account(
+            CpiContext::new_with_signer(
+                self.token_program.to_account_info(),
+                CloseAccount {
+                    account: self.vault_pending_unstake.to_account_info(),
+                    destination: self.beneficiary.to_account_info(),
+                    authority: self.stake_pool.to_account_info(),
+                },
+                &[&seeds[..]]
+            ),
+        )
+    }
+
+    pub fn close_stake_vault(&self) -> Result<()> {
+        let seeds: &[&[u8]] = &[
+            // TODO change stake_pool seeds, remove reward
+            self.stake_pool.to_account_info().key.as_ref(),
+            self.member.to_account_info().key.as_ref(),
+            &[self.member_stake.bump]
+        ];
+
+        token::close_account(
+            CpiContext::new_with_signer(
+                self.token_program.to_account_info(),
+                CloseAccount {
+                    account: self.vault_staked.to_account_info(),
+                    destination: self.beneficiary.to_account_info(),
+                    authority: self.member_stake.to_account_info(),
+                },
+                &[&seeds[..]]
+            ),
+        )
     }
 }
