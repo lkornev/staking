@@ -12,7 +12,7 @@ export async function claimRewardRPC(ctx: Ctx, memberStake: MemberStake) {
             vaultStaked: memberStake.vaultStaked,
             vaultReward: ctx.PDAS.factory.vaultReward,
             beneficiary: memberStake.member.beneficiary.publicKey,
-            beneficiaryRewardVault: memberStake.member.beneficiaryRewardVault.address,
+            beneficiaryRewardVault: memberStake.member.beneficiaryRewardVault,
             ownerFeeRewardVault: ctx.owner.feeRewardVault,
             tokenProgram: TOKEN_PROGRAM_ID,
             clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,

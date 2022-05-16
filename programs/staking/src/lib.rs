@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 mod reward; use reward::*;
 mod account; use account::*;
 mod context; use context::*;
+mod access_control; use access_control::*;
 mod error; use error::SPError;
 
 declare_id!("5E1FrMGJa9S1qJHXVZKdhuu3WF8BrwzNdx1JKARyNbVm");
@@ -31,6 +32,7 @@ pub mod staking {
         min_owner_reward: u32,
         reward_metadata: u128, // Could be any data depending on the `Reward` // TODO combine with `reward` into a single struct
         owner_interest_percent: u8,
+        unstake_delay: u64,
         reward_period: u64,
     ) -> Result<()> {
         // TODO check owner_interest 1 - 100%
@@ -43,6 +45,7 @@ pub mod staking {
         stake_pool.reward_metadata = reward_metadata;
         stake_pool.bump = bump;
         stake_pool.owner_interest_percent = owner_interest_percent;
+        stake_pool.unstake_delay = unstake_delay;
         stake_pool.reward_period = reward_period;
 
         Ok(())
@@ -152,10 +155,16 @@ pub mod staking {
         Ok(())
     }
 
-    /// Move tokens from `pending unstaking vault` to `free vault`.
+    /// Moves tokens from `pending unstaking vault` to `free vault`.
+    /// Destroys Stake and Unstake accounts and vaults
+    #[access_control(allow_finish_unstake(&ctx))]
     pub fn finish_unstake_all(
-        _ctx: Context<FinishUnstakeAll>,
+        ctx: Context<FinishUnstakeAll>,
+        reward: Reward, // TODO remove from here and from the accounts
     ) -> Result<()> {
+        // TODO move tokens from `pending unstaking vault` to `free vault`.
+        // TODO destroy Unstake Acc and vault (Close acc instr)
+        // TODO destroy Stake Acc and vault (Close acc instr)
 
         Ok(())
     }

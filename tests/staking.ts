@@ -11,6 +11,7 @@ import { startUnstakeAllRPC } from "./rpc/start-unstake-all";
 import { Check } from "./check/check";
 import { sleepTill } from "./helpers/general";
 import { Reward } from "./types/reward";
+import { finishUnstakeAllRPC } from "./rpc/finish-unstake-all";
 
 describe("staking", () => {
     anchor.setProvider(anchor.AnchorProvider.env());
@@ -49,8 +50,8 @@ describe("staking", () => {
         });
 
         it("Claims reward", async () => {
-            let stakedAt = Number((await ctx.program.account.memberStake.fetch(ctx.PDAS[reward].memberStake.key)).stakedAt);
-            let rewardPeriod = Number(ctx.PDAS[reward].stakePool.rewardPeriod);
+            const stakedAt = Number((await ctx.program.account.memberStake.fetch(ctx.PDAS[reward].memberStake.key)).stakedAt);
+            const rewardPeriod = Number(ctx.PDAS[reward].stakePool.rewardPeriod);
             await sleepTill((stakedAt + rewardPeriod + rewardPeriod * 0.5) * 1000);
             await Check.claimReward(ctx, ctx.PDAS[reward].memberStake, claimRewardRPC);
         });
@@ -58,13 +59,21 @@ describe("staking", () => {
         it("Starts unstaking", async () => {
             await Check.startUnstakeAll(ctx, ctx.PDAS[reward].memberUnstakeAll, startUnstakeAllRPC);
         });
+
+        it("Finishes unstaking", async () => {
+            const unstakedAcc = await ctx.program.account.memberPendingUnstake.fetch(ctx.PDAS[reward].memberUnstakeAll.key);
+            const unstakedAt = Number((unstakedAcc).unstakedAt);
+            const unstakeDelay = Number(ctx.PDAS[reward].stakePool.unstakeDelay);
+            await sleepTill((unstakedAt + unstakeDelay + 2) * 1000);
+            await Check.finishUnstakeAll(ctx, ctx.PDAS[reward].memberUnstakeAll, finishUnstakeAllRPC);
+        });
     };
 
     describe("with fixed reward", async () => {
         await testStaking(Reward.Fixed.name);
     });
 
-    describe("with unfixed reward", async () => {
-        await testStaking(Reward.Unfixed.name);
-    });
+    // describe("with unfixed reward", async () => {
+    //     await testStaking(Reward.Unfixed.name);
+    // });
 });

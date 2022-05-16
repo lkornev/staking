@@ -19,6 +19,7 @@ export namespace Check {
     export async function newStakePool(ctx: Ctx, stakePool: StakePool) {
         const stakePoolAcc = await ctx.program.account.stakePool.fetch(stakePool.key);
         expect(`${stakePoolAcc.totalStakedTokens}`).to.be.eq(`${0}`);
+        expect(`${stakePoolAcc.unstakeDelay}`).to.be.eq(`${stakePool.unstakeDelay}`);
         expect(stakePoolAcc.rewardType).to.be.deep.eq(stakePool.rewardType.value);
         expect(`${stakePoolAcc.rewardMetadata}`).to.be.eq(`${stakePool.rewardMetadata}`);
         expect(`${stakePoolAcc.ownerInterestPercent}`).to.be.eq(`${stakePool.ownerInterestPercent}`);
@@ -26,7 +27,7 @@ export namespace Check {
     }
 
     export async function memberDeposit(ctx: Ctx, member: Member, deposit: (ctx: Ctx, member: Member) => Promise<void>) {
-        const beneficiaryAccountStateBefore = await getTokenAccount(ctx.connection, member.beneficiaryTokenAccount.address);
+        const beneficiaryAccountStateBefore = await getTokenAccount(ctx.connection, member.beneficiaryStakeVault);
         const memberVaultFreeBefore = await getTokenAccount(ctx.connection, member.vaultFree);
         expect(`${beneficiaryAccountStateBefore.amount}`).to.be.eq(`${member.stakeTokenAmount}`);
         expect(`${memberVaultFreeBefore.amount}`).to.be.eq(`0`);
@@ -38,7 +39,7 @@ export namespace Check {
         expect(`${memberAcc.vaultFree}`).to.be.eq(`${member.vaultFree}`);
         expect(memberAcc.bump).to.be.eq(member.bump);
 
-        const beneficiaryAccountState = await getTokenAccount(ctx.connection, member.beneficiaryTokenAccount.address);
+        const beneficiaryAccountState = await getTokenAccount(ctx.connection, member.beneficiaryStakeVault);
         const memberVaultFree = await getTokenAccount(ctx.connection, member.vaultFree);
         expect(`${beneficiaryAccountState.amount}`).to.be.eq(`0`);
         expect(`${memberVaultFree.amount}`).to.be.eq(`${member.stakeTokenAmount}`);
@@ -91,12 +92,12 @@ export namespace Check {
         claimReward: (ctx: Ctx, memberStake: MemberStake) => Promise<void>
     ) {
         const factory = await ctx.program.account.factory.fetch(ctx.PDAS.factory.key);
-        const userRewardBefore = (await getTokenAccount(ctx.connection, ctx.PDAS.member.beneficiaryRewardVault.address)).amount;
+        const userRewardBefore = (await getTokenAccount(ctx.connection, ctx.PDAS.member.beneficiaryRewardVault)).amount;
         const ownerFeeBefore = (await getTokenAccount(ctx.connection, ctx.owner.feeRewardVault)).amount;
 
         await claimReward(ctx, memberStake);
 
-        const userRewardAfter = (await getTokenAccount(ctx.connection, ctx.PDAS.member.beneficiaryRewardVault.address)).amount;
+        const userRewardAfter = (await getTokenAccount(ctx.connection, ctx.PDAS.member.beneficiaryRewardVault)).amount;
         expect(Number(userRewardAfter)).to.be.above(Number(userRewardBefore));
 
         const factoryRewardVaultAfter = await getTokenAccount(ctx.connection, factory.vaultReward);
@@ -126,14 +127,21 @@ export namespace Check {
         const nowSecs = Math.floor((Date.now() / 1000));
         expect(Number((memberPendingUnstakeAcc).unstakedAt)).to.be.below(nowSecs + 2).to.be.above(nowSecs - 2);
 
-        // Staked amount transferred to pending unstake account
-        const PUAmount = (await getTokenAccount(ctx.connection, memberUnstakeAll.vaultPendingUnstake)).amount;
-        const stakedAmountAfter = (await getTokenAccount(ctx.connection, memberUnstakeAll.memberStake.vaultStaked)).amount;
-        expect(Number(stakedAmountAfter)).to.be.eq(0);
-        expect(`${PUAmount}`).to.be.eq(`${stakedAmountBefore}`);
-
         // Total staked amount reduced
         const totalStakedAfter = (await ctx.program.account.stakePool.fetch(memberUnstakeAll.stakePool.key)).totalStakedTokens;
         expect(`${Number(totalStakedBefore) - Number(stakedAmountBefore)}`).to.be.eq(`${totalStakedAfter}`);
+    }
+
+    export async function finishUnstakeAll(
+        ctx: Ctx,
+        memberUnstakeAll: MemberUnstakeAll,
+        finishUnstakeAll: (ctx: Ctx, memberUnstakeAll: MemberUnstakeAll) => Promise<void>,
+    ) {
+        await finishUnstakeAll(ctx, memberUnstakeAll);
+        // Staked amount transferred to pending unstake account
+        // const PUAmount = (await getTokenAccount(ctx.connection, memberUnstakeAll.vaultPendingUnstake)).amount;
+        // const stakedAmountAfter = (await getTokenAccount(ctx.connection, memberUnstakeAll.memberStake.vaultStaked)).amount;
+        // expect(Number(stakedAmountAfter)).to.be.eq(0);
+        // expect(`${PUAmount}`).to.be.eq(`${stakedAmountBefore}`);
     }
 }

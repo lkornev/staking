@@ -50,6 +50,8 @@ pub struct StakePool {
     pub bump: u8,
     /// The percentage of reward tokens the owner will receive from each user's reward.
     pub owner_interest_percent: u8,
+    /// The time in seconds a Member have to wait to unstake the tokens
+    pub unstake_delay: u64,
     /// Minimum amount of reward tokens the owner will receive from each user's reward.
     pub min_owner_reward: u32,
     /// The time in seconds a Member have to wait to receive the next reward.
@@ -58,7 +60,7 @@ pub struct StakePool {
 }
 
 impl StakePool {
-    pub const SPACE: usize = 1 + 16 + 8 + 8 + 16 + 1 + 1 + 4 + 8;
+    pub const SPACE: usize = 1 + 16 + 8 + 8 + 16 + 1 + 1 + 8 + 4 + 8;
 }
 
 /// Member account represents a user of the stake pool factory program.

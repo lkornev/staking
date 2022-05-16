@@ -9,7 +9,7 @@ export async function depositRPC(ctx: Ctx, member: Member) {
     .accounts({
         factory: ctx.PDAS.factory.key,
         beneficiary: member.beneficiary.publicKey,
-        beneficiaryTokenAccount: member.beneficiaryTokenAccount.address,
+        beneficiaryTokenAccount: member.beneficiaryStakeVault,
         member: member.key,
         vaultFree: member.vaultFree,
         systemProgram: SystemProgram.programId,

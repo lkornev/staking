@@ -12,6 +12,7 @@ export async function newStakePoolRPC(ctx: Ctx, stakePool: StakePool) {
         stakePool.minOwnerReward,
         stakePool.rewardMetadata,
         stakePool.ownerInterestPercent, // %
+        stakePool.unstakeDelay, // secs
         stakePool.rewardPeriod,
     )
     .accounts({

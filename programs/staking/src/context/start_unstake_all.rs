@@ -33,7 +33,6 @@ pub struct StartUnstakeAll<'info> {
     pub member: Account<'info, Member>,
     #[account(
         mut,
-        close = beneficiary,
         seeds = [
             stake_pool.to_account_info().key.as_ref(),
             member.to_account_info().key.as_ref(),

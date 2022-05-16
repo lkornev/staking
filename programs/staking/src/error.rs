@@ -24,4 +24,6 @@ pub enum SPError {
     TokensToShareEmpty,
     #[msg("No staked tokens")]
     NoStakedTokens,
+    #[msg("Unstake delay hasn't passed yet")]
+    NotAllowedFinishUnstakeYet,
 }

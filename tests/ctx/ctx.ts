@@ -52,6 +52,7 @@ export async function createCtx(): Promise<Ctx> {
             factory,
             stakePool,
             memberStake,
+            member,
         });
         return { stakePool, memberStake, memberUnstakeAll };
     }
@@ -152,6 +153,7 @@ export interface StakePool extends CtxPDA {
     endedAt: BN, // secs
     rewardPeriod: BN, // secs
     ownerInterestPercent: number, // %
+    unstakeDelay: BN, // secs
     rewardType: RewardType,
     minOwnerReward: number,
     rewardMetadata: BN,
@@ -164,6 +166,7 @@ export interface StakePoolCtx {
     factory: Factory,
     endedAt?: BN,
     ownerInterestPercent?: number, // %
+    unstakeDelay?: BN, // secs
     rewardPeriod?: BN, // secs
     minOwnerReward?: number,
 }
@@ -184,6 +187,7 @@ export async function createStakePool(ctx: StakePoolCtx): Promise<StakePool> {
         rewardMetadata: ctx.rewardMetadata,
         endedAt: ctx.endedAt || new BN(Math.floor(Date.now() / 1000)).add(rewardPeriod.mul(new BN(50))),
         ownerInterestPercent: ctx.ownerInterestPercent || 1, // %
+        unstakeDelay: ctx.unstakeDelay || new BN(5), // secs
         rewardPeriod: rewardPeriod, // secs
         minOwnerReward: ctx.minOwnerReward || 1, // tokens
     }
@@ -191,7 +195,7 @@ export async function createStakePool(ctx: StakePoolCtx): Promise<StakePool> {
 
 export interface Member extends CtxPDA {
     beneficiary: Signer,
-    beneficiaryTokenAccount: TokenAccount,
+    beneficiaryStakeVault: PublicKey,
     vaultFree: PublicKey, 
     stakeTokenAmount: BN,
     amountToDeposit: BN,
@@ -199,7 +203,7 @@ export interface Member extends CtxPDA {
         fixed: BN,
         unfixed: BN,
     },
-    beneficiaryRewardVault: TokenAccount,
+    beneficiaryRewardVault: PublicKey,
 }
 
 export interface MemberCtx {
@@ -213,17 +217,17 @@ export async function createMember(ctx: MemberCtx): Promise<Member> {
     const amountToDeposit = stakeTokenAmount;
 
     const beneficiary = await createUserWithLamports(ctx.connection, 10);
-    const beneficiaryTokenAccount = await getOrCreateAssociatedTokenAccount(
+    const beneficiaryStakeVault = (await getOrCreateAssociatedTokenAccount(
         ctx.connection,
         beneficiary, // Payer
         ctx.factory.stakeTokenMint,
         beneficiary.publicKey, // Owner
-    );
+    )).address;
     await mintTo(
         ctx.connection,
         ctx.factory.owner,  // Payer
         ctx.factory.stakeTokenMint,
-        beneficiaryTokenAccount.address, // mint to
+        beneficiaryStakeVault, // mint to
         ctx.factory.owner, // Authority
         Number(stakeTokenAmount),
     );
@@ -235,12 +239,12 @@ export async function createMember(ctx: MemberCtx): Promise<Member> {
         ctx.program.programId
     );
     const vaultFree = await getAssociatedTokenAddress(ctx.factory.stakeTokenMint, memberPDA, true);
-    const beneficiaryRewardVault = await getOrCreateAssociatedTokenAccount(
+    const beneficiaryRewardVault = (await getOrCreateAssociatedTokenAccount(
         ctx.connection,
         beneficiary,
         ctx.factory.rewardTokenMint,
         beneficiary.publicKey
-    );
+    )).address;
 
     const fixedAmountToStake = amountToDeposit.div(new BN(2));
     const unfixedAmountToStake = amountToDeposit.sub(fixedAmountToStake);
@@ -249,7 +253,7 @@ export async function createMember(ctx: MemberCtx): Promise<Member> {
         key: memberPDA,
         bump: memberBump,
         beneficiary,
-        beneficiaryTokenAccount,
+        beneficiaryStakeVault,
         vaultFree,
         stakeTokenAmount,
         amountToDeposit,
@@ -298,6 +302,7 @@ export async function createMemberStake(ctx: MemberStakeCtx, amountToStake: BN):
 
 export interface MemberUnstakeAll extends CtxPDA  {
     stakePool: StakePool,
+    member: Member,
     memberStake: MemberStake,
     vaultPendingUnstake: PublicKey,
 }
@@ -308,6 +313,7 @@ export interface MemberUnstakeAllCtx {
     factory: Factory,
     stakePool: StakePool,
     memberStake: MemberStake,
+    member: Member,
 }
 
 export async function createMemberUnstakeAll(ctx: MemberUnstakeAllCtx): Promise<MemberUnstakeAll> {
@@ -324,6 +330,7 @@ export async function createMemberUnstakeAll(ctx: MemberUnstakeAllCtx): Promise<
         key: memberUnstake,
         bump: memberUnstakeBump,
         memberStake: ctx.memberStake,
+        member: ctx.member,
         stakePool: ctx.stakePool,
         vaultPendingUnstake,
     }
