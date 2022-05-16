@@ -12,6 +12,7 @@ import { Check } from "./check/check";
 import { sleepTill } from "./helpers/general";
 import { Reward } from "./types/reward";
 import { finishUnstakeAllRPC } from "./rpc/finish-unstake-all";
+import { withdrawalAllRPC } from "./rpc/withdraw-all";
 
 describe("staking", () => {
     anchor.setProvider(anchor.AnchorProvider.env());
@@ -66,6 +67,10 @@ describe("staking", () => {
             const unstakeDelay = Number(ctx.PDAS[reward].stakePool.unstakeDelay);
             await sleepTill((unstakedAt + unstakeDelay + 2) * 1000);
             await Check.finishUnstakeAll(ctx, ctx.PDAS[reward].memberUnstakeAll, finishUnstakeAllRPC);
+        });
+
+        it("Withdraw staked tokens", async () => {
+            await Check.withdrawAll(ctx, ctx.PDAS.member, withdrawalAllRPC);
         });
     };
 

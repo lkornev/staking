@@ -4,7 +4,6 @@ use crate::reward::Reward;
 use anchor_spl::token::{self, TokenAccount, Token, CloseAccount};
 
 
-
 #[derive(Accounts)]
 #[instruction(reward: Reward)]
 pub struct FinishUnstakeAll<'info> {

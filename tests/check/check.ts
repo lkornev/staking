@@ -157,4 +157,16 @@ export namespace Check {
         // Rent-exempt lamports for no longer used accounts has returned to the member's beneficiary
         expect(Number(beneficiaryLamportsAfter) - Number(beneficiaryLamportsBefore)).to.be.eq(rentToBeReturned);
     }
+
+    export async function withdrawAll(ctx: Ctx, member: Member, withdrawAll: (ctx: Ctx, member: Member) => Promise<void>) {
+        const beneficiaryVaultBefore = Number((await getTokenAccount(ctx.connection, member.beneficiaryStakeVault)).amount);
+        const vaultFreeBefore = Number((await getTokenAccount(ctx.connection, member.vaultFree)).amount);
+
+        await withdrawAll(ctx, member);
+
+        const beneficiaryVaultAfter = Number((await getTokenAccount(ctx.connection, member.beneficiaryStakeVault)).amount);
+        const vaultFreeAfter = Number((await getTokenAccount(ctx.connection, member.vaultFree)).amount);
+        expect(vaultFreeAfter).to.be.eq(0);
+        expect(beneficiaryVaultAfter).to.be.eq(beneficiaryVaultBefore + vaultFreeBefore);
+    }
 }

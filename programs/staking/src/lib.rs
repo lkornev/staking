@@ -173,10 +173,8 @@ pub mod staking {
     /// To withdraw deposited tokens from the stake program user firstly
     /// have to transfer tokens to his `free vault` inside the program 
     /// using start_unstake and finish_unstake methods.
-    pub fn withdraw_all(
-        _ctx: Context<WithdrawAll>,
-    ) -> Result<()> {
-        unimplemented!()
+    pub fn withdraw_all(ctx: Context<WithdrawAll>) -> Result<()> {
+        ctx.accounts.transfer_free_vault_tokens_to_beneficiary()
     }
 
 }
