@@ -6,11 +6,10 @@ import { Ctx, StakePool } from "../ctx/ctx";
 
 export async function newStakePoolRPC(ctx: Ctx, stakePool: StakePool) {
     await ctx.program.methods.newStakePool(
-        stakePool.rewardType.value,
-        stakePool.bump,
+        stakePool.name,
+        stakePool.rewardType.value as any,
         stakePool.endedAt,
         stakePool.minOwnerReward,
-        stakePool.rewardMetadata,
         stakePool.ownerInterestPercent, // %
         stakePool.unstakeDelay, // secs
         stakePool.rewardPeriod,

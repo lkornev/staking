@@ -4,9 +4,7 @@ import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { Ctx, MemberUnstakeAll } from "../ctx/ctx";
 
 export async function finishUnstakeAllRPC(ctx: Ctx, memberUnstakeAll: MemberUnstakeAll) {
-    await ctx.program.methods.finishUnstakeAll(
-        memberUnstakeAll.stakePool.rewardType.value,
-    )
+    await ctx.program.methods.finishUnstakeAll()
     .accounts({
         factory: ctx.PDAS.factory.key,
         stakePool: memberUnstakeAll.stakePool.key,

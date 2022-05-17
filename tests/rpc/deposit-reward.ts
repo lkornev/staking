@@ -5,14 +5,14 @@ import { Ctx } from "../ctx/ctx";
 
 export async function depositRewardRPC(ctx: Ctx, rewardTokensAmount: number) {
     await ctx.program.methods.depositReward(new anchor.BN(rewardTokensAmount))
-        .accounts({
-            factory: ctx.PDAS.factory.key,
-            owner: ctx.owner.publicKey,
-            vaultOwner: ctx.owner.rewardTokenVault,
-            vaultReward: ctx.PDAS.factory.vaultReward,
-            systemProgram: SystemProgram.programId,
-            tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .signers([ctx.owner])
-        .rpc();
+    .accounts({
+        factory: ctx.PDAS.factory.key,
+        owner: ctx.owner.publicKey,
+        vaultOwner: ctx.owner.rewardTokenVault,
+        vaultReward: ctx.PDAS.factory.vaultReward,
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+    })
+    .signers([ctx.owner])
+    .rpc();
 }

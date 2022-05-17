@@ -1,11 +1,9 @@
 use anchor_lang::prelude::*;
 use crate::account::*;
-use crate::reward::Reward;
 use anchor_spl::token::{self, TokenAccount, Token, Mint};
 use anchor_spl::associated_token::AssociatedToken;
 
 #[derive(Accounts)]
-#[instruction(reward: Reward)]
 pub struct Stake<'info> {
     #[account(
         seeds = [Factory::PDA_SEED],
@@ -18,7 +16,7 @@ pub struct Stake<'info> {
         mut,
         seeds = [
             factory.to_account_info().key.as_ref(),
-            &[reward as u8] // TODO replace with some random pubkey
+            stake_pool.name.as_ref(),
         ],
         bump = stake_pool.bump,
     )]

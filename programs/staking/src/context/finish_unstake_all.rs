@@ -1,11 +1,9 @@
 use anchor_lang::prelude::*;
 use crate::account::*;
-use crate::reward::Reward;
 use anchor_spl::token::{self, TokenAccount, Token, CloseAccount};
 
 
 #[derive(Accounts)]
-#[instruction(reward: Reward)]
 pub struct FinishUnstakeAll<'info> {
     #[account(
         seeds = [Factory::PDA_SEED], 
@@ -16,7 +14,7 @@ pub struct FinishUnstakeAll<'info> {
         mut,
         seeds = [
             factory.to_account_info().key.as_ref(),
-            &[reward as u8] // TODO replace with some random pubkey
+            stake_pool.name.as_ref()
         ],
         bump = stake_pool.bump,
     )]
@@ -73,7 +71,7 @@ impl<'info> FinishUnstakeAll<'info> {
     pub fn transfer_pu_tokens_to_free_vault(&self, amount: u64) -> Result<()> {
         let seeds: &[&[u8]] = &[
             self.factory.to_account_info().key.as_ref(),
-            &[self.stake_pool.reward_type as u8],
+            self.stake_pool.name.as_ref(),
             &[self.stake_pool.bump]
         ];
 
@@ -94,7 +92,7 @@ impl<'info> FinishUnstakeAll<'info> {
     pub fn close_pending_unstake_vault(&self) -> Result<()> {
         let seeds: &[&[u8]] = &[
             self.factory.to_account_info().key.as_ref(),
-            &[self.stake_pool.reward_type as u8],
+            self.stake_pool.name.as_ref(),
             &[self.stake_pool.bump]
         ];
 

@@ -28,6 +28,7 @@ impl Factory {
 
 #[account]
 pub struct StakePool {
+    pub name: String,
     /// If the `reward_type` is Fixed
     /// `reward_metadata` is the fixed percentage of the income.
     /// Should be greater than 0 and less or equal to 100.
@@ -38,7 +39,6 @@ pub struct StakePool {
     /// in proportion to a user's staked tokens among all members.
     /// Should be greater than 0.
     pub reward_type: Reward,
-    pub reward_metadata: u128,
     /// The UNIX time when this config was created. 
     // Invariant: The config that is added later has a timestamp greater than previous configs.
     pub started_at: u64,
@@ -60,7 +60,7 @@ pub struct StakePool {
 }
 
 impl StakePool {
-    pub const SPACE: usize = 1 + 16 + 8 + 8 + 16 + 1 + 1 + 8 + 4 + 8;
+    pub const SPACE: usize = (10 + 4) + (1 + 16) + 8 + 8 + 16 + 1 + 1 + 8 + 4 + 8;
 }
 
 /// Member account represents a user of the stake pool factory program.

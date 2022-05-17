@@ -30,4 +30,8 @@ pub enum SPError {
     OwnerInterestWrong,
     #[msg("Before staking you should add enough tokens to the free_vault")]
     NotEnoughFreeVaultAmount,
+    #[msg("Stake pool name to short or too long")]
+    StakePoolNameWrong,
+    #[msg("Not enough reward tokens in the provided owner reward vault")]
+    NotEnoughOwnerRewardVaultAmount,
 }

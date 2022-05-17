@@ -1,7 +1,7 @@
 [features]
 seeds = false
 [programs.localnet]
-staking = "5E1FrMGJa9S1qJHXVZKdhuu3WF8BrwzNdx1JKARyNbVm"
+staking = "8z5zCNBPzLuG1ZwkXfVVRCfpK5txF1UdHLfJjYFfmvQy"
 
 [registry]
 url = "https://anchor.projectserum.com"

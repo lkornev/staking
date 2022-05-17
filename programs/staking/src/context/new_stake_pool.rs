@@ -1,10 +1,9 @@
 use anchor_lang::prelude::*;
 use crate::account::*;
-use crate::reward::Reward;
 use crate::error::SPError;
 
 #[derive(Accounts)]
-#[instruction(reward: Reward)]
+#[instruction(name: String)]
 pub struct NewStakePool<'info> {
     #[account(
         mut,
@@ -19,7 +18,7 @@ pub struct NewStakePool<'info> {
         space = 8 + StakePool::SPACE,
         seeds = [
             factory.to_account_info().key.as_ref(),
-            &[reward as u8] // TODO replace with some random pubkey
+            name.as_bytes()
         ],
         bump,
     )]

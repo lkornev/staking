@@ -20,10 +20,11 @@ export namespace Check {
         const stakePoolAcc = await ctx.program.account.stakePool.fetch(stakePool.key);
         expect(`${stakePoolAcc.totalStakedTokens}`).to.be.eq(`${0}`);
         expect(`${stakePoolAcc.unstakeDelay}`).to.be.eq(`${stakePool.unstakeDelay}`);
-        expect(stakePoolAcc.rewardType).to.be.deep.eq(stakePool.rewardType.value);
-        expect(`${stakePoolAcc.rewardMetadata}`).to.be.eq(`${stakePool.rewardMetadata}`);
+        expect(`${stakePoolAcc.rewardType[stakePool.rewardType.name].data}`)
+            .to.be.eq(`${stakePool.rewardType.value[stakePool.rewardType.name].data}`);
         expect(`${stakePoolAcc.ownerInterestPercent}`).to.be.eq(`${stakePool.ownerInterestPercent}`);
         expect(`${stakePoolAcc.rewardPeriod}`).to.be.eq(`${stakePool.rewardPeriod}`);
+        expect(Buffer.from(stakePoolAcc.name).toString().trim()).to.be.eq(stakePool.name);
     }
 
     export async function memberDeposit(ctx: Ctx, member: Member, deposit: (ctx: Ctx, member: Member) => Promise<void>) {

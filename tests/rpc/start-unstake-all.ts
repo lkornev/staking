@@ -4,10 +4,7 @@ import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token
 import { Ctx, MemberUnstakeAll } from "../ctx/ctx";
 
 export async function startUnstakeAllRPC(ctx: Ctx, memberUnstakeAll: MemberUnstakeAll) {
-    await ctx.program.methods.startUnstakeAll(
-        memberUnstakeAll.stakePool.rewardType.value,
-        memberUnstakeAll.bump,
-    )
+    await ctx.program.methods.startUnstakeAll()
     .accounts({
         factory: ctx.PDAS.factory.key,
         stakeTokenMint: memberUnstakeAll.stakePool.factory.stakeTokenMint,

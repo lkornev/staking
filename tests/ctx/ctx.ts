@@ -9,7 +9,6 @@ import {
 import {
     createMint,
     getOrCreateAssociatedTokenAccount,
-    Account as TokenAccount,
     mintTo,
     getAssociatedTokenAddress,
 } from '@solana/spl-token';
@@ -43,8 +42,9 @@ export async function createCtx(): Promise<Ctx> {
     const factory = await createFactory({program, connection, owner});
     const member = await createMember({program, connection, factory});
 
-    let stakeGroup = async (rewardType: RewardType, rewardData: BN, amountToStake: BN): Promise<StakeGroup> => {
-        const stakePool = await createStakePool({program, factory, rewardType, rewardMetadata: rewardData});
+    let stakeGroup = async (reward: RewardType, amountToStake: BN): Promise<StakeGroup> => {
+        const name = reward.name;
+        const stakePool = await createStakePool({program, name, factory, reward});
         const memberStake = await createMemberStake({ connection, program, factory, member, stakePool}, amountToStake);
         const memberUnstakeAll = await createMemberUnstakeAll({ 
             connection,
@@ -63,8 +63,8 @@ export async function createCtx(): Promise<Ctx> {
         PDAS: {
             factory,
             member,
-            fixed: await stakeGroup(Reward.Fixed, new BN(10), member.amountToStake.fixed),
-            unfixed: await stakeGroup(Reward.Unfixed,  new BN(200), member.amountToStake.unfixed),
+            fixed: await stakeGroup(Reward(new BN(10)).Fixed, member.amountToStake.fixed),
+            unfixed: await stakeGroup(Reward(new BN(200)).Unfixed, member.amountToStake.unfixed),
         },
         owner,
     }
@@ -150,19 +150,19 @@ export async function createFactory(ctx: FactoryCtx): Promise<Factory> {
 
 export interface StakePool extends CtxPDA {
     factory: Factory,
+    name: string,
     endedAt: BN, // secs
     rewardPeriod: BN, // secs
     ownerInterestPercent: number, // %
     unstakeDelay: BN, // secs
     rewardType: RewardType,
     minOwnerReward: number,
-    rewardMetadata: BN,
 }
 
 export interface StakePoolCtx {
     program: Program<Staking>,
-    rewardType: RewardType,
-    rewardMetadata: BN,
+    name: string,
+    reward: RewardType,
     factory: Factory,
     endedAt?: BN,
     ownerInterestPercent?: number, // %
@@ -175,7 +175,7 @@ export async function createStakePool(ctx: StakePoolCtx): Promise<StakePool> {
     const [stakePoolPDA, stakePoolBump] = await PublicKey.findProgramAddress(
         [ 
             ctx.factory.key.toBuffer(),
-            Uint8Array.from([ctx.rewardType.index]) 
+            Buffer.from(ctx.name),
         ],
         ctx.program.programId
     );
@@ -185,9 +185,9 @@ export async function createStakePool(ctx: StakePoolCtx): Promise<StakePool> {
     return {
         key: stakePoolPDA,
         bump: stakePoolBump,
+        name: ctx.name,
         factory: ctx.factory,
-        rewardType: ctx.rewardType,
-        rewardMetadata: ctx.rewardMetadata,
+        rewardType: ctx.reward,
         endedAt: ctx.endedAt || new BN(Math.floor(Date.now() / 1000)).add(rewardPeriod.mul(new BN(50))),
         ownerInterestPercent: ctx.ownerInterestPercent || 1, // %
         unstakeDelay: ctx.unstakeDelay || new BN(5), // secs

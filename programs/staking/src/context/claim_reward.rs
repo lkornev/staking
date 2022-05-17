@@ -1,10 +1,8 @@
 use anchor_lang::prelude::*;
 use crate::account::*;
-use crate::reward::Reward;
 use anchor_spl::token::{self, TokenAccount, Token};
 
 #[derive(Accounts)]
-#[instruction(reward: Reward)]
 pub struct ClaimReward<'info> {
     #[account(
         seeds = [Factory::PDA_SEED],
@@ -14,7 +12,7 @@ pub struct ClaimReward<'info> {
     #[account(
         seeds = [
             factory.to_account_info().key.as_ref(),
-            &[reward as u8] // TODO replace with some random pubkey
+            stake_pool.name.as_ref(),
         ],
         bump = stake_pool.bump,
     )]
@@ -77,7 +75,6 @@ impl<'info> ClaimReward<'info> {
                 self.stake_pool.started_at,
                 self.vault_staked.amount,
                 self.stake_pool.reward_period,
-                self.stake_pool.reward_metadata,
                 self.stake_pool.total_staked_tokens,
             )
     }

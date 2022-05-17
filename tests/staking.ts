@@ -10,9 +10,9 @@ import { claimRewardRPC } from "./rpc/claim-reward";
 import { startUnstakeAllRPC } from "./rpc/start-unstake-all";
 import { Check } from "./check/check";
 import { sleepTill } from "./helpers/general";
-import { Reward } from "./types/reward";
 import { finishUnstakeAllRPC } from "./rpc/finish-unstake-all";
 import { withdrawalAllRPC } from "./rpc/withdraw-all";
+import { RewardName } from "./types/reward";
 
 describe("staking", () => {
     anchor.setProvider(anchor.AnchorProvider.env());
@@ -41,20 +41,20 @@ describe("staking", () => {
     });
 
     it("Stakes", async () => {
-        await stakeSuite(ctx, Reward.Fixed.name);
-        await stakeSuite(ctx, Reward.Unfixed.name)
+        await stakeSuite(ctx, "fixed");
+        await stakeSuite(ctx, "unfixed")
     });
 
     it("Unstakes and withdraws tokens", async () => {
-        await unstakeSuite(ctx, Reward.Fixed.name);
+        await unstakeSuite(ctx, "fixed");
         await Check.withdrawAll(ctx, ctx.PDAS.member, withdrawalAllRPC);
 
-        await unstakeSuite(ctx, Reward.Unfixed.name);
+        await unstakeSuite(ctx, "unfixed");
         await Check.withdrawAll(ctx, ctx.PDAS.member, withdrawalAllRPC);
     });
 });
 
-async function stakeSuite (ctx: Ctx, reward: "fixed" | "unfixed") {
+async function stakeSuite (ctx: Ctx, reward: RewardName) {
     await newStakePoolRPC(ctx, ctx.PDAS[reward].stakePool);
     await Check.newStakePool(ctx, ctx.PDAS[reward].stakePool);
 
@@ -66,7 +66,7 @@ async function stakeSuite (ctx: Ctx, reward: "fixed" | "unfixed") {
     await Check.claimReward(ctx, ctx.PDAS[reward].memberStake, claimRewardRPC);
 };
 
-async function unstakeSuite (ctx: Ctx, reward: "fixed" | "unfixed") {
+async function unstakeSuite (ctx: Ctx, reward: RewardName) {
     await Check.startUnstakeAll(ctx, ctx.PDAS[reward].memberUnstakeAll, startUnstakeAllRPC);
 
     const unstakedAcc = await ctx.program.account.memberPendingUnstake.fetch(ctx.PDAS[reward].memberUnstakeAll.key);

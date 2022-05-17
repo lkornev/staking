@@ -15,14 +15,10 @@ pub struct Deposit<'info> {
             factory.to_account_info().key.as_ref(),
         ],
         bump = member.bump,
+        has_one = vault_free,
     )]
     pub member: Account<'info, Member>,
-    #[account(
-        mut, 
-        // TODO add an error with useful text
-        constraint = vault_free.owner == member.to_account_info().key(),
-        constraint = vault_free.mint == factory.stake_token_mint,
-    )]
+    #[account(mut)]
     pub vault_free: Box<Account<'info, TokenAccount>>,
     #[account(mut)]
     pub beneficiary: Signer<'info>,

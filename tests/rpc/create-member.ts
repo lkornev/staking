@@ -4,9 +4,7 @@ import { TOKEN_PROGRAM_ID,ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token'
 import { Ctx, Member } from "../ctx/ctx";
 
 export async function createMemberRPC(ctx: Ctx, member: Member) {
-    await ctx.program.methods.createMember(
-        member.bump,
-    )
+    await ctx.program.methods.createMember()
     .accounts({
         factory: ctx.PDAS.factory.key,
         stakeTokenMint: ctx.PDAS.factory.stakeTokenMint,
