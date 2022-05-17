@@ -30,7 +30,7 @@ impl Factory {
 pub struct StakePool {
     /// If the `reward_type` is Fixed
     /// `reward_metadata` is the fixed percentage of the income.
-    /// Should be greater than 0 and less or equal to 100. (TODO check the range only if the reward_type is Fixed).
+    /// Should be greater than 0 and less or equal to 100.
     /// The reward is granted as a fixed percentage of the staked tokens.
     /// 
     /// If the `reward_type` is Unfixed

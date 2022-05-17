@@ -3,7 +3,6 @@ import {
     getAccount as getTokenAccount,
     getMinimumBalanceForRentExemptAccount,
 } from '@solana/spl-token';
-import { PublicKey } from "@solana/web3.js";
 import { expect } from "chai";
 import { Ctx, Member, MemberStake, MemberUnstakeAll, StakePool } from '../ctx/ctx';
 
@@ -63,12 +62,16 @@ export namespace Check {
         memberStake: MemberStake,
         stake: (ctx: Ctx, stakePool: StakePool, member: Member, memberStake: MemberStake) => Promise<void>) 
     {
+        const freeBefore = Number((await getTokenAccount(ctx.connection, memberStake.member.vaultFree)).amount);
+
         await stake(ctx, stakePool, member, memberStake);
 
-        // TODO check memberStakeVault fields
+        const freeAfter = Number((await getTokenAccount(ctx.connection, memberStake.member.vaultFree)).amount);
+        const staked = Number((await getTokenAccount(ctx.connection, memberStake.vaultStaked)).amount);
+        const amountToStake = Number(memberStake.amountToStake);
 
-        const memberStakeVaultVaultChanged = await getTokenAccount(ctx.connection, memberStake.vaultStaked);
-        expect(`${memberStakeVaultVaultChanged.amount}`).to.be.eq(`${memberStake.amountToStake}`);
+        expect(staked).to.be.eq(amountToStake);
+        expect(freeBefore - freeAfter).to.be.eq(Number(memberStake.amountToStake));
     }
 
     export async function depositReward(

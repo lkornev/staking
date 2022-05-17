@@ -40,45 +40,38 @@ describe("staking", () => {
         await Check.memberDeposit(ctx, ctx.PDAS.member, depositRPC);
     });
 
-    let testStaking = async (reward: "fixed" | "unfixed") => {
-        it("Creates new staking pool instance", async () => {
-            await newStakePoolRPC(ctx, ctx.PDAS[reward].stakePool);
-            await Check.newStakePool(ctx, ctx.PDAS[reward].stakePool);
-        });
-
-        it("Stakes tokens", async () => {
-            await Check.memberStake(ctx, ctx.PDAS[reward].stakePool, ctx.PDAS.member, ctx.PDAS[reward].memberStake, stakeRPC);
-        });
-
-        it("Claims reward", async () => {
-            const stakedAt = Number((await ctx.program.account.memberStake.fetch(ctx.PDAS[reward].memberStake.key)).stakedAt);
-            const rewardPeriod = Number(ctx.PDAS[reward].stakePool.rewardPeriod);
-            await sleepTill((stakedAt + rewardPeriod + rewardPeriod * 0.5) * 1000);
-            await Check.claimReward(ctx, ctx.PDAS[reward].memberStake, claimRewardRPC);
-        });
-
-        it("Starts unstaking", async () => {
-            await Check.startUnstakeAll(ctx, ctx.PDAS[reward].memberUnstakeAll, startUnstakeAllRPC);
-        });
-
-        it("Finishes unstaking", async () => {
-            const unstakedAcc = await ctx.program.account.memberPendingUnstake.fetch(ctx.PDAS[reward].memberUnstakeAll.key);
-            const unstakedAt = Number((unstakedAcc).unstakedAt);
-            const unstakeDelay = Number(ctx.PDAS[reward].stakePool.unstakeDelay);
-            await sleepTill((unstakedAt + unstakeDelay + 2) * 1000);
-            await Check.finishUnstakeAll(ctx, ctx.PDAS[reward].memberUnstakeAll, finishUnstakeAllRPC);
-        });
-
-        it("Withdraw staked tokens", async () => {
-            await Check.withdrawAll(ctx, ctx.PDAS.member, withdrawalAllRPC);
-        });
-    };
-
-    describe("with fixed reward", async () => {
-        await testStaking(Reward.Fixed.name);
+    it("Stakes", async () => {
+        await stakeSuite(ctx, Reward.Fixed.name);
+        await stakeSuite(ctx, Reward.Unfixed.name)
     });
 
-    // describe("with unfixed reward", async () => {
-    //     await testStaking(Reward.Unfixed.name);
-    // });
+    it("Unstakes and withdraws tokens", async () => {
+        await unstakeSuite(ctx, Reward.Fixed.name);
+        await Check.withdrawAll(ctx, ctx.PDAS.member, withdrawalAllRPC);
+
+        await unstakeSuite(ctx, Reward.Unfixed.name);
+        await Check.withdrawAll(ctx, ctx.PDAS.member, withdrawalAllRPC);
+    });
 });
+
+async function stakeSuite (ctx: Ctx, reward: "fixed" | "unfixed") {
+    await newStakePoolRPC(ctx, ctx.PDAS[reward].stakePool);
+    await Check.newStakePool(ctx, ctx.PDAS[reward].stakePool);
+
+    await Check.memberStake(ctx, ctx.PDAS[reward].stakePool, ctx.PDAS.member, ctx.PDAS[reward].memberStake, stakeRPC);
+
+    const stakedAt = Number((await ctx.program.account.memberStake.fetch(ctx.PDAS[reward].memberStake.key)).stakedAt);
+    const rewardPeriod = Number(ctx.PDAS[reward].stakePool.rewardPeriod);
+    await sleepTill((stakedAt + rewardPeriod + rewardPeriod * 0.5) * 1000);
+    await Check.claimReward(ctx, ctx.PDAS[reward].memberStake, claimRewardRPC);
+};
+
+async function unstakeSuite (ctx: Ctx, reward: "fixed" | "unfixed") {
+    await Check.startUnstakeAll(ctx, ctx.PDAS[reward].memberUnstakeAll, startUnstakeAllRPC);
+
+    const unstakedAcc = await ctx.program.account.memberPendingUnstake.fetch(ctx.PDAS[reward].memberUnstakeAll.key);
+    const unstakedAt = Number((unstakedAcc).unstakedAt);
+    const unstakeDelay = Number(ctx.PDAS[reward].stakePool.unstakeDelay);
+    await sleepTill((unstakedAt + unstakeDelay + 2) * 1000);
+    await Check.finishUnstakeAll(ctx, ctx.PDAS[reward].memberUnstakeAll, finishUnstakeAllRPC);
+}

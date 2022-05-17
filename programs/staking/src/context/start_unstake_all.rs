@@ -17,7 +17,10 @@ pub struct StartUnstakeAll<'info> {
     pub stake_token_mint: Box<Account<'info, Mint>>,
     #[account(
         mut,
-        seeds = [&[reward as u8]],
+        seeds = [
+            factory.to_account_info().key.as_ref(),
+            &[reward as u8] // TODO replace with some random pubkey
+        ],
         bump = stake_pool.bump,
     )]
     pub stake_pool: Account<'info, StakePool>,

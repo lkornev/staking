@@ -173,7 +173,10 @@ export interface StakePoolCtx {
 
 export async function createStakePool(ctx: StakePoolCtx): Promise<StakePool> {
     const [stakePoolPDA, stakePoolBump] = await PublicKey.findProgramAddress(
-        [ Uint8Array.from([ctx.rewardType.index]) ],
+        [ 
+            ctx.factory.key.toBuffer(),
+            Uint8Array.from([ctx.rewardType.index]) 
+        ],
         ctx.program.programId
     );
 

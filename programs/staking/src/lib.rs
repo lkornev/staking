@@ -35,7 +35,8 @@ pub mod staking {
         unstake_delay: u64,
         reward_period: u64,
     ) -> Result<()> {
-        // TODO check owner_interest 1 - 100%
+        require!(owner_interest_percent > 0 && owner_interest_percent < 100, SPError::OwnerInterestWrong);
+
         let stake_pool = &mut ctx.accounts.stake_pool;
         stake_pool.started_at = ctx.accounts.clock.unix_timestamp as u64;
         stake_pool.ends_at = ends_at;
@@ -84,7 +85,7 @@ pub mod staking {
     /// Move tokens from the `vault free` to the `MemberStake vault`
     /// Tokens inside `MemberStake vault` allow to get rewards pro rata staked amount.
     /// Member can stake coins from one's `vault free` to any stake.
-    /// Member must claim the rewards before staking more tokens to the same pool. (TODO Check)
+    /// Member must claim the rewards before staking more tokens to the same pool.
     #[allow(unused_variables)] // but it's not
     pub fn stake(
         ctx: Context<Stake>,
@@ -92,8 +93,7 @@ pub mod staking {
         member_stake_bump: u8,
         amount: u64, // The amount of the tokens to stake
     ) -> Result<()> {
-        // TODO check the amount is less or equals to the vault_free amount of tokens 
-        // and throw an error if needed
+        require!(amount <= ctx.accounts.vault_free.amount, SPError::NotEnoughFreeVaultAmount);
 
         let member_stake = &mut ctx.accounts.member_stake;
         member_stake.beneficiary = ctx.accounts.beneficiary.key();

@@ -14,7 +14,10 @@ pub struct FinishUnstakeAll<'info> {
     pub factory: Account<'info, Factory>,
     #[account(
         mut,
-        seeds = [&[reward as u8]],
+        seeds = [
+            factory.to_account_info().key.as_ref(),
+            &[reward as u8] // TODO replace with some random pubkey
+        ],
         bump = stake_pool.bump,
     )]
     pub stake_pool: Account<'info, StakePool>,
@@ -69,7 +72,7 @@ pub struct FinishUnstakeAll<'info> {
 impl<'info> FinishUnstakeAll<'info> {
     pub fn transfer_pu_tokens_to_free_vault(&self, amount: u64) -> Result<()> {
         let seeds: &[&[u8]] = &[
-            // TODO change stake_pool seeds, remove reward
+            self.factory.to_account_info().key.as_ref(),
             &[self.stake_pool.reward_type as u8],
             &[self.stake_pool.bump]
         ];
@@ -90,7 +93,7 @@ impl<'info> FinishUnstakeAll<'info> {
 
     pub fn close_pending_unstake_vault(&self) -> Result<()> {
         let seeds: &[&[u8]] = &[
-            // TODO change stake_pool seeds, remove reward
+            self.factory.to_account_info().key.as_ref(),
             &[self.stake_pool.reward_type as u8],
             &[self.stake_pool.bump]
         ];
@@ -110,7 +113,6 @@ impl<'info> FinishUnstakeAll<'info> {
 
     pub fn close_stake_vault(&self) -> Result<()> {
         let seeds: &[&[u8]] = &[
-            // TODO change stake_pool seeds, remove reward
             self.stake_pool.to_account_info().key.as_ref(),
             self.member.to_account_info().key.as_ref(),
             &[self.member_stake.bump]

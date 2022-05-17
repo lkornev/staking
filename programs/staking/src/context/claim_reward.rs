@@ -12,7 +12,10 @@ pub struct ClaimReward<'info> {
     )]
     pub factory: Account<'info, Factory>,
     #[account(
-        seeds = [&[reward as u8]],
+        seeds = [
+            factory.to_account_info().key.as_ref(),
+            &[reward as u8] // TODO replace with some random pubkey
+        ],
         bump = stake_pool.bump,
     )]
     pub stake_pool: Account<'info, StakePool>,

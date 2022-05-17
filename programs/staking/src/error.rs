@@ -26,4 +26,8 @@ pub enum SPError {
     NoStakedTokens,
     #[msg("Unstake delay hasn't passed yet")]
     NotAllowedFinishUnstakeYet,
+    #[msg("Owner interest should be between 1% and 99%")]
+    OwnerInterestWrong,
+    #[msg("Before staking you should add enough tokens to the free_vault")]
+    NotEnoughFreeVaultAmount,
 }

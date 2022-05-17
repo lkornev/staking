@@ -17,8 +17,10 @@ pub struct NewStakePool<'info> {
         init,
         payer = owner,
         space = 8 + StakePool::SPACE,
-        // TODO replace and connect with the factory and some random pubkey
-        seeds = [&[reward as u8]],
+        seeds = [
+            factory.to_account_info().key.as_ref(),
+            &[reward as u8] // TODO replace with some random pubkey
+        ],
         bump,
     )]
     pub stake_pool: Account<'info, StakePool>,
